@@ -12,6 +12,7 @@ describe("MCP tool definitions", () => {
       [
         "begin-task",
         "build-matrix",
+        "coordinator-brief",
         "forge-status",
         "init",
         "lint-design",

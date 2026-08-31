@@ -79,10 +79,21 @@ export function formatBeginTaskReport(
   return [head, ...meta.map((m) => `  ${m}`), "", JSON.stringify(payload, null, 2)].join("\n");
 }
 
+export function formatCoordinatorBriefReport(
+  briefPath: string,
+  body: string,
+  verbose = false,
+): string {
+  if (!verbose) {
+    return JSON.stringify({ ok: true, path: briefPath }, null, 2);
+  }
+  return [`SuperSpec coordinator-brief: ${briefPath}`, "", body].join("\n");
+}
+
 export function formatRecordResultReport(
   taskId: string,
   passed: boolean,
-  extra?: { dir?: string; statusPath?: string; cwd?: string },
+  extra?: { dir?: string; statusPath?: string; coordinatorPath?: string; cwd?: string },
   verbose = false,
 ): string {
   const payload = { ok: true, taskId, passed, ...extra };
@@ -92,6 +103,7 @@ export function formatRecordResultReport(
   const meta: string[] = [];
   if (extra?.dir) meta.push(`dir: ${extra.dir}`);
   if (extra?.statusPath) meta.push(`status.md: ${extra.statusPath}`);
+  if (extra?.coordinatorPath) meta.push(`coordinator.md: ${extra.coordinatorPath}`);
   if (extra?.cwd) meta.push(`cwd: ${extra.cwd}`);
   return [head, ...meta.map((m) => `  ${m}`), "", JSON.stringify(payload, null, 2)].join("\n");
 }

@@ -14,9 +14,79 @@ You take an execution map (from superspec-route) or a task plan (from superspec-
 **Core principle:** `nextTask`, `recordResult`, `markInProgress`, `forgeStatus`, and `sync-status` are the forge operations exposed by `@superspec-dev/core` (CLI + MCP). Each spec directory keeps:
 
 - `specs/<feature>/.superspec/state.json` — machine state (gitignored)
+- `specs/<feature>/.superspec/coordinator.md` — **lean loop handoff** (coordinator re-reads this; gitignored)
+- `specs/<feature>/.superspec/reports/` — per-task implementer/reviewer reports (gitignored)
 - `specs/<feature>/status.md` — **committed FR + task status table** (updated by `sync-status` / `record-result --spec`)
 
 Also use **TodoWrite** for in-session task visibility (same pattern as Superpowers `subagent-driven-development`).
+
+## Lean Coordinator Loop (long forges)
+
+Subagents stay fresh; the **coordinator thread still grows** unless you offload memory to disk. For multi-task forges, run the loop in **lean coordinator mode**:
+
+### Forge start (once)
+
+```bash
+npx @superspec-dev/core coordinator-init --dir specs/<feature> --plan specs/<feature>/plan.md
+# or MCP coordinator-brief({ specDir, planPath }) — paths only, not file contents
+```
+
+Creates/refreshes `specs/<feature>/.superspec/coordinator.md`. **Re-read this file** at loop start and after any context compaction — not chat history.
+
+### Per-task loop (unchanged logic, lean I/O)
+
+```text
+1. coordinator-brief        → refresh handoff (or trust file written by record-result --coordinator)
+2. next-task / begin-task   → CLI with --plan and --dir paths only
+3. Dispatch implementer     → file refs, not pasted templates (see below)
+4. Dispatch reviewer        → file refs; full verdict written to .superspec/reports/
+5. record-result --coordinator --commits … --implementer-report … --reviewer-report …
+6. sync-status / forge-status → CLI, no embedded spec/plan text in MCP
+7. Coordinator chat: ONE line → `T00X pass abc1234` then immediately next task
+```
+
+### Subagent dispatch (lean)
+
+**Do not paste** `implementer.md`, `task-reviewer.md`, or `constitution.md` into `Task` prompts. Minimum implementer prompt:
+
+```text
+Task({
+  subagent_type: "generalPurpose",
+  model: "<routed slug>",
+  description: "Implement T00X",
+  prompt: """
+  Read agents/implementer.md and constitution.md from the repo.
+  Write your full report to specs/<feature>/.superspec/reports/T00X-implementer.md
+  Reply to coordinator with ≤8 lines (status, commits, report path only).
+
+  Task T00X: [title]
+  FR: FR-00N
+  Acceptance: [bullets]
+  """
+})
+```
+
+Reviewer — separate dispatch, report to `T00X-reviewer.md`, coordinator gets ≤8 lines (verdict + path only).
+
+### After each pass
+
+```bash
+npx @superspec-dev/core record-result \
+  --plan specs/<feature>/plan.md --dir specs/<feature> \
+  --task T00X --passed true --spec specs/<feature>/spec.md \
+  --coordinator --commits abc1234 \
+  --implementer-report .superspec/reports/T00X-implementer.md \
+  --reviewer-report .superspec/reports/T00X-reviewer.md
+```
+
+This updates `state.json`, `status.md`, and appends a one-line row to `coordinator.md` (keeps last 8 tasks).
+
+### Coordinator red flags (lean mode)
+
+- Pasting full diffs, reviewer reports, or template files into coordinator chat
+- Using MCP `next-task` / `record-result` with embedded `planText` / `specText` when CLI file paths work
+- Letting subagents return multi-paragraph reports to the coordinator
+- Relying on conversation memory after compaction instead of `coordinator.md` + `status.md`
 
 **Continuous execution:** do not pause to check in with your human partner between tasks. Execute all ready tasks without stopping. The only reasons to stop are: a task permanently `blocked` that you cannot resolve, ambiguity that genuinely prevents progress, or `forge-status` reporting `complete: true`. "Should I continue?" prompts waste your partner's time — they asked you to run the loop, so run it.
 

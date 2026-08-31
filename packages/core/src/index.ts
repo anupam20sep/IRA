@@ -43,3 +43,13 @@ export {
   type PersonaSource,
   type DiscoverPersonasOptions,
 } from "./persona-discovery.js";
+export {
+  appendCoordinatorLog,
+  buildCoordinatorBrief,
+  coordinatorPaths,
+  readCoordinatorBriefText,
+  reportFilePath,
+  writeCoordinatorBrief,
+  type CoordinatorBriefPaths,
+  type CoordinatorLogEntry,
+} from "./coordinator-ledger.js";

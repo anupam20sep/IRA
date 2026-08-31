@@ -21,7 +21,22 @@ import {
 } from "./forge-loop.js";
 import { initProject } from "./init.js";
 import { syncStatusFromFiles } from "./fr-status.js";
-import { emitInitFailure, emitInitSuccess, formatBeginTaskReport, formatCommandError, formatForgeStatusReport, formatNextTaskReport, formatRecordResultReport, formatSyncStatusReport } from "./cli-output.js";
+import {
+  appendCoordinatorLog,
+  readCoordinatorBriefText,
+  writeCoordinatorBrief,
+} from "./coordinator-ledger.js";
+import {
+  emitInitFailure,
+  emitInitSuccess,
+  formatBeginTaskReport,
+  formatCommandError,
+  formatCoordinatorBriefReport,
+  formatForgeStatusReport,
+  formatNextTaskReport,
+  formatRecordResultReport,
+  formatSyncStatusReport,
+} from "./cli-output.js";
 import { isDirectRun } from "./cli-entry.js";
 import { writeStatusFile } from "./fr-status.js";
 
@@ -286,6 +301,40 @@ async function runCliInner(argv: string[]): Promise<CliResult> {
     }
   }
 
+  if (command === "coordinator-brief" || command === "coordinator-init") {
+    const { values } = parseArgs({
+      args: rest,
+      options: {
+        dir: { type: "string" },
+        plan: { type: "string" },
+        verbose: { type: "boolean", short: "v" },
+      },
+    });
+    const missing = [
+      values.dir === undefined ? "--dir" : null,
+      values.plan === undefined ? "--plan" : null,
+    ].filter((x): x is string => x !== null);
+    if (missing.length > 0) {
+      return {
+        code: 0,
+        stdout: formatCommandError(command, new Error(`missing required argument ${missing.join(", ")}`)),
+      };
+    }
+    try {
+      const briefPath = await writeCoordinatorBrief({
+        specDir: values.dir as string,
+        planPath: values.plan as string,
+      });
+      const body = await readCoordinatorBriefText(values.dir as string);
+      return {
+        code: 0,
+        stdout: formatCoordinatorBriefReport(briefPath, body, values.verbose !== false),
+      };
+    } catch (err) {
+      return { code: 0, stdout: formatCommandError(command, err) };
+    }
+  }
+
   if (command === "record-result") {
     const { values } = parseArgs({
       args: rest,
@@ -296,6 +345,10 @@ async function runCliInner(argv: string[]): Promise<CliResult> {
         passed: { type: "string" },
         spec: { type: "string" },
         verbose: { type: "boolean", short: "v" },
+        coordinator: { type: "boolean" },
+        commits: { type: "string" },
+        "implementer-report": { type: "string" },
+        "reviewer-report": { type: "string" },
       },
     });
     const missing = [
@@ -333,12 +386,27 @@ async function runCliInner(argv: string[]): Promise<CliResult> {
           state,
         );
       }
+      let coordinatorPath: string | undefined;
+      if (values.coordinator === true) {
+        coordinatorPath = await appendCoordinatorLog({
+          specDir: values.dir as string,
+          planPath: values.plan as string,
+          entry: {
+            taskId: values.task as string,
+            verdict: passed ? "pass" : state.tasks[values.task as string]?.status === "blocked" ? "blocked" : "fail",
+            commits: values.commits as string | undefined,
+            implementerReport: values["implementer-report"] as string | undefined,
+            reviewerReport: values["reviewer-report"] as string | undefined,
+            at: new Date().toISOString(),
+          },
+        });
+      }
       return {
         code: 0,
         stdout: formatRecordResultReport(
           values.task as string,
           passed,
-          { dir: values.dir as string, statusPath, cwd: process.cwd() },
+          { dir: values.dir as string, statusPath, coordinatorPath, cwd: process.cwd() },
           values.verbose === true,
         ),
       };
@@ -419,7 +487,7 @@ async function runCliInner(argv: string[]): Promise<CliResult> {
 
   return {
     code: 0,
-    stdout: `Unknown command: ${command ?? "(none)"}. Try: init | matrix | lint | scaffold | list-personas | next-task | begin-task | record-result | sync-status | forge-status | mcp`,
+    stdout: `Unknown command: ${command ?? "(none)"}. Try: init | matrix | lint | scaffold | list-personas | coordinator-init | coordinator-brief | next-task | begin-task | record-result | sync-status | forge-status | mcp`,
   };
 }
 

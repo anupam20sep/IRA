@@ -23,7 +23,13 @@ import {
   formatRecordResultReport,
   formatSyncStatusReport,
   formatCommandError,
+  formatCoordinatorBriefReport,
 } from "./cli-output.js";
+import {
+  appendCoordinatorLog,
+  readCoordinatorBriefText,
+  writeCoordinatorBrief,
+} from "./coordinator-ledger.js";
 import { isDirectRun } from "./cli-entry.js";
 
 interface ToolContent {
@@ -203,6 +209,30 @@ export function buildToolDefinitions(): ToolDef[] {
       },
     },
     {
+      name: "coordinator-brief",
+      description:
+        "Write or refresh specs/<feature>/.superspec/coordinator.md — the lean forge loop handoff file. " +
+        "Coordinator agents re-read this after compaction instead of chat history. Pass specDir + planPath (filesystem paths, not file contents).",
+      schema: {
+        specDir: z.string(),
+        planPath: z.string(),
+        verbose: z.boolean().optional(),
+      },
+      handler: async (args) => {
+        try {
+          const briefPath = await writeCoordinatorBrief({
+            specDir: args.specDir as string,
+            planPath: args.planPath as string,
+          });
+          const body = await readCoordinatorBriefText(args.specDir as string);
+          const verbose = (args.verbose as boolean | undefined) ?? true;
+          return { content: [{ type: "text", text: formatCoordinatorBriefReport(briefPath, body, verbose) }] };
+        } catch (err) {
+          return { content: [{ type: "text", text: formatCommandError("coordinator-brief", err) }] };
+        }
+      },
+    },
+    {
       name: "begin-task",
       description: "Mark a forge task as in_progress and persist state.",
       schema: {
@@ -266,6 +296,11 @@ export function buildToolDefinitions(): ToolDef[] {
         specText: z.string().optional(),
         specDir: z.string().optional(),
         verbose: z.boolean().optional(),
+        coordinator: z.boolean().optional(),
+        commits: z.string().optional(),
+        implementerReport: z.string().optional(),
+        reviewerReport: z.string().optional(),
+        planPath: z.string().optional(),
       },
       handler: async (args) => {
         try {
@@ -288,11 +323,26 @@ export function buildToolDefinitions(): ToolDef[] {
               state,
             );
           }
+          let coordinatorPath: string | undefined;
+          if (args.coordinator === true && args.planPath !== undefined) {
+            coordinatorPath = await appendCoordinatorLog({
+              specDir: args.stateDir as string,
+              planPath: args.planPath as string,
+              entry: {
+                taskId,
+                verdict: passed ? "pass" : state.tasks[taskId]?.status === "blocked" ? "blocked" : "fail",
+                commits: args.commits as string | undefined,
+                implementerReport: args.implementerReport as string | undefined,
+                reviewerReport: args.reviewerReport as string | undefined,
+                at: new Date().toISOString(),
+              },
+            });
+          }
           const verbose = (args.verbose as boolean | undefined) ?? true;
           const text = formatRecordResultReport(
             taskId,
             passed,
-            { dir: args.stateDir as string, statusPath, cwd: process.cwd() },
+            { dir: args.stateDir as string, statusPath, coordinatorPath, cwd: process.cwd() },
             verbose,
           );
           return { content: [{ type: "text", text }] };

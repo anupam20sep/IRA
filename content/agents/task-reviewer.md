@@ -124,6 +124,18 @@ For each issue: file:line, what's wrong, why it matters, how to fix.
 
 ---
 
-Report your verdicts and findings with no preamble. The detail is everything.
+Write the full review to `[REPORT_FILE]` (default: `specs/<feature>/.superspec/reports/T00X-reviewer.md`).
+
+Then report back to the **coordinator** with ONLY (≤8 lines):
+
+**Spec verdict:** ✅ | ❌
+
+**Quality verdict:** ✅ | ⚠️
+
+**Assessment:** Approved | Needs fixes
+
+**Report file:** [path]
+
+Do not paste findings, diffs, or issue lists into the coordinator message — detail belongs in the report file only.
 
 <!-- Adapted from SP: skills/subagent-driven-development/task-reviewer-prompt.md (MIT). See /NOTICE. -->

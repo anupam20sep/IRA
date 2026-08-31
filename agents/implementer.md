@@ -109,7 +109,7 @@ Write your full detailed report to [REPORT_FILE] with:
 - Self-review findings (if any)
 - Any concerns or issues
 
-Then report back here with ONLY (under 15 lines):
+Then report back to the **coordinator** with ONLY (≤8 lines total):
 
 **Status:** DONE | DONE_WITH_CONCERNS | BLOCKED | NEEDS_CONTEXT
 
@@ -117,9 +117,11 @@ Then report back here with ONLY (under 15 lines):
 
 **Tests:** [e.g., "12/12 passing, output pristine"]
 
-**Concerns:** [if any]
+**Concerns:** [if any, one line]
 
-**Report file:** [path]
+**Report file:** [path under `.superspec/reports/T00X-implementer.md`]
+
+Do not paste test output, diffs, or self-review detail into the coordinator message — that belongs in the report file only.
 
 Use DONE if implementation is complete and high-confidence. Use DONE_WITH_CONCERNS if complete but you have doubts about correctness. Use BLOCKED if you cannot complete the task. Use NEEDS_CONTEXT if critical information wasn't provided. Never silently produce work you're unsure about.
 

@@ -37,9 +37,15 @@ Conversation memory does not survive compaction. These artifacts do:
 | `specs/<feature>/plan.md` | TDD-executable tasks |
 | `specs/<feature>/status.md` | FR + task progress (committed) |
 | `specs/<feature>/.superspec/state.json` | Machine forge state (gitignored) |
+| `specs/<feature>/.superspec/coordinator.md` | **Lean loop handoff** — coordinator re-reads after compaction (gitignored) |
+| `specs/<feature>/.superspec/reports/` | Per-task implementer/reviewer reports (gitignored) |
 | `constitution.md` | Non-negotiable Test-First + traceability rules |
 
-After restart or compaction: trust `status.md`, `state.json`, and `git log` — not memory.
+After restart or compaction: trust `coordinator.md`, `status.md`, `state.json`, and `git log` — not memory.
+
+### Lean coordinator loop
+
+Long forges should use `coordinator-init` / `coordinator-brief` (CLI or MCP with **file paths only**) so the coordinator thread stays a one-line-per-task loop. See `superspec-forge` → **Lean Coordinator Loop**.
 
 ---
 
