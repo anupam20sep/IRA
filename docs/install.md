@@ -29,13 +29,13 @@ Repo-root `.mcp.json` uses npm — no local build of `packages/core` required:
   "mcpServers": {
     "superspec": {
       "command": "npx",
-      "args": ["-y", "@superspec-dev/core@0.2.13", "mcp"]
+      "args": ["-y", "@superspec-dev/core@0.2.15", "mcp"]
     }
   }
 }
 ```
 
-On first MCP use, `npx` downloads `@superspec-dev/core@0.2.13` from the [npm registry](https://www.npmjs.com/package/@superspec-dev/core). Use `@0.2.13` or newer for default project/home persona discovery and economy/standard/frontier model routing.
+On first MCP use, `npx` downloads `@superspec-dev/core@0.2.15` from the [npm registry](https://www.npmjs.com/package/@superspec-dev/core). Use `@0.2.13` or newer for default project/home persona discovery and economy/standard/frontier model routing.
 
 ### Local checkout (contributors)
 
@@ -67,7 +67,7 @@ Add the same `npx` entry to that project's own `.mcp.json` if you only want tool
 
 Or by URL: `/add-plugin https://github.com/anupam20sep/superspec`
 
-Skills ship from `./skills/` per `.cursor-plugin/plugin.json`. Optional MCP: add `npx -y @superspec-dev/core@0.2.13 mcp` to your project's `.cursor/mcp.json` (see main README).
+Skills ship from `./skills/` per `.cursor-plugin/plugin.json`. Optional MCP: add `npx -y @superspec-dev/core@0.2.15 mcp` to your project's `.cursor/mcp.json` (see main README).
 
 ## Codex
 

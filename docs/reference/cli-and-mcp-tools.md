@@ -42,6 +42,7 @@ Empty JSON `[]` from lint = pass.
 | `record-result` | `record-result` | Pass/fail; optional `spec` refreshes `status.md` |
 | `sync-status` | `sync-status` | Write `status.md` |
 | `forge-status` | `forge-status` | Aggregate counts; optional spec writes `status.md` |
+| `coordinator-brief` | `coordinator-brief` / `coordinator-init` | Refresh `specs/<feature>/.superspec/coordinator.md` (lean forge handoff) |
 | `route-model` | — | `mechanical`→economy; `moderate`→standard; `complex`→frontier (+ optional `.superspec/models.yaml` via `projectRoot`) |
 
 All forge commands need `stateDir` / `--dir specs/<feature>`.

@@ -162,7 +162,7 @@ On first MCP use, `npx` downloads `@superspec-dev/core` from npm. Requires Node.
   "mcpServers": {
     "superspec": {
       "command": "npx",
-      "args": ["-y", "@superspec-dev/core@0.2.13", "mcp"]
+      "args": ["-y", "@superspec-dev/core@0.2.15", "mcp"]
     }
   }
 }
@@ -563,7 +563,7 @@ Add to `.cursor/mcp.json`, `.mcp.json`, or Codex `~/.codex/config.toml` / `codex
   "mcpServers": {
     "superspec": {
       "command": "npx",
-      "args": ["-y", "@superspec-dev/core@0.2.13", "mcp"]
+      "args": ["-y", "@superspec-dev/core@0.2.15", "mcp"]
     }
   }
 }

@@ -8,7 +8,7 @@
     {
       "name": "superspec",
       "description": "Full lifecycle plugin: specs, TDD plans, forge loop, lint gates, and coverage matrix.",
-      "version": "0.3.6",
+      "version": "0.3.7",
       "source": "./",
       "author": {
         "name": "SuperSpec contributors"

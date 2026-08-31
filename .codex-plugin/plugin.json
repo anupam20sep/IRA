@@ -1,6 +1,6 @@
 {
   "name": "superspec",
-  "version": "0.3.6",
+  "version": "0.3.7",
   "description": "Spec-driven + TDD-driven AI development for Codex: explore, scope, design, plan, forge, validate, and ship with traceable requirements and mandatory TDD for code tasks.",
   "skills": "./skills/",
   "mcpServers": "./.mcp.json",

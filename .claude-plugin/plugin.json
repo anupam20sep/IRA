@@ -1,7 +1,7 @@
 {
   "name": "superspec",
   "displayName": "SuperSpec",
-  "version": "0.3.6",
+  "version": "0.3.7",
   "description": "Spec-driven + TDD-driven AI development: explore, scope, design, plan, forge, validate, and ship with traceable requirements and mandatory TDD for code tasks.",
   "author": {
     "name": "SuperSpec contributors"

@@ -78,7 +78,7 @@ Add `.cursor/mcp.json` in your project:
   "mcpServers": {
     "superspec": {
       "command": "npx",
-      "args": ["-y", "@superspec-dev/core@0.2.13", "mcp"]
+      "args": ["-y", "@superspec-dev/core@0.2.15", "mcp"]
     }
   }
 }
