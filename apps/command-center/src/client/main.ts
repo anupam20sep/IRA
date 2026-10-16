@@ -2,7 +2,9 @@ import type { BoardSnapshot } from "../shared/snapshot-types.js";
 import { renderShell, type ShellView } from "./shell.js";
 import { renderFleetView } from "./views/fleet.js";
 import { renderAskMeView } from "./views/ask-me.js";
+import { renderActivityView, type ActivityViewState } from "./views/activity.js";
 import { renderTasksView } from "./views/tasks.js";
+import { renderTriggersView } from "./views/triggers.js";
 
 const REFETCH_PREFIXES = ["task.", "ask_me.", "brief.", "away.", "autonomy.", "hive."] as const;
 
@@ -102,7 +104,7 @@ const VIEW_MOUNTS: Record<ShellView, ViewMount> = {
   memory: placeholderMount("Memory"),
   spend: placeholderMount("Spend"),
   "ask-me": placeholderMount("Ask-Me"),
-  triggers: placeholderMount("Triggers"),
+  triggers: (host, snap) => renderTriggersView(host, snap),
 };
 
 export function parseViewFromHash(hash: string): ShellView {
@@ -255,6 +257,8 @@ export function bootstrapClient(deps: BootstrapDeps): CommandCenterClient {
 
   let snapshot: BoardSnapshot | null = null;
   let presentationStale = false;
+  const activityState: ActivityViewState = { prepended: [] };
+  let lastMountedView: ShellView | null = null;
 
   let postMutationRef: (path: string, init?: Omit<RequestInit, "method">) => Promise<Response> =
     async () => new Response(null, { status: 500 });
@@ -264,6 +268,10 @@ export function bootstrapClient(deps: BootstrapDeps): CommandCenterClient {
     storage.setItem(VIEW_SESSION_KEY, view);
     const host = root.querySelector("[data-view-host]") as HTMLElement | null;
     if (!host || !snapshot) return;
+    if (lastMountedView !== view && view !== "activity") {
+      activityState.prepended = [];
+    }
+    lastMountedView = view;
     if (view === "tasks") {
       const steerDisabled =
         presentationStale || snapshot.stale || snapshot.doctor.hiveReady !== true;
@@ -274,8 +282,26 @@ export function bootstrapClient(deps: BootstrapDeps): CommandCenterClient {
       renderFleetView(host, snapshot);
       return;
     }
+    if (view === "activity") {
+      renderActivityView(host, snapshot.events, {
+        state: activityState,
+        fetchEventsBefore: async (eventsBefore) => {
+          const url = new URL(`${apiOrigin}/api/snapshot`);
+          url.searchParams.set("eventsBefore", eventsBefore);
+          const response = await clientFetch(url.toString());
+          if (!response.ok) return [];
+          const page = (await response.json()) as BoardSnapshot;
+          return page.events;
+        },
+      });
+      return;
+    }
     if (view === "ask-me") {
       renderAskMeView(host, snapshot, { postMutation: postMutationRef });
+      return;
+    }
+    if (view === "triggers") {
+      renderTriggersView(host, snapshot);
       return;
     }
     VIEW_MOUNTS[view](host, snapshot);
