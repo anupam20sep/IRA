@@ -1,0 +1,16 @@
+:root {
+  --ira-field: #0e1114;
+  --ira-field-raised: #161b20;
+  --ira-glass: rgba(168, 198, 210, 0.07);
+  --ira-glass-border: rgba(176, 208, 220, 0.35);
+  --ira-glass-highlight: rgba(214, 232, 240, 0.12);
+  --ira-text: #d7dee6;
+  --ira-text-dim: #8e9aa6;
+  --ira-telemetry: #d5e0d2;
+  --ira-lamp-cool: #6ec8c0;
+  --ira-lamp-amber: #d59a45;
+  --ira-lamp-red: #c45448;
+  --ira-presence: #b7d4e4;
+  --ira-reveal-ms: 160ms;
+  --ira-lamp-period: 1600ms;
+}
