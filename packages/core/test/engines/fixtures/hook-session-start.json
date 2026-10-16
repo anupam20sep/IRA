@@ -1,0 +1,11 @@
+{
+  "session_id": "ses_vendor_hook",
+  "transcript_path": "/tmp/should-not-copy.jsonl",
+  "cwd": "/repo",
+  "hook_event_name": "SessionStart",
+  "source": "startup",
+  "model": "claude-opus",
+  "prompt": "do not copy this prompt",
+  "code": "console.log(1)",
+  "secret": "sk-fixturesecret"
+}
