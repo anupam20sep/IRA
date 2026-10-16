@@ -3,6 +3,7 @@ import { renderShell, type ShellView } from "./shell.js";
 import { renderFleetView } from "./views/fleet.js";
 import { renderAskMeView } from "./views/ask-me.js";
 import { renderActivityView, type ActivityViewState } from "./views/activity.js";
+import { renderBriefView } from "./views/brief.js";
 import { renderTasksView } from "./views/tasks.js";
 import { renderTriggersView } from "./views/triggers.js";
 
@@ -272,6 +273,10 @@ export function bootstrapClient(deps: BootstrapDeps): CommandCenterClient {
       activityState.prepended = [];
     }
     lastMountedView = view;
+    if (view === "brief") {
+      renderBriefView(host, snapshot, { postMutation: postMutationRef });
+      return;
+    }
     if (view === "tasks") {
       const steerDisabled =
         presentationStale || snapshot.stale || snapshot.doctor.hiveReady !== true;
