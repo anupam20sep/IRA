@@ -17,6 +17,12 @@ import { personaField, type IraPersonaField } from "./persona.js";
 import { AutonomySettingsSchema } from "./schema.js";
 import { withLock } from "./store.js";
 import type { AutonomySettings } from "./types.js";
+import {
+  collectEngineDoctorFindings,
+  computeEngineRungReady as computeEngineRungReadyFromFindings,
+  type DoctorFinding as EngineDoctorFinding,
+  summarizePostSliceARungs,
+} from "../engines/doctor-findings.js";
 
 const GITIGNORE_LINE = ".superspec/hive/";
 const REQUIRED_MCP_TOOLS = ["hive-init", "dispatch-task", "doctor"] as const;
@@ -35,13 +41,6 @@ const HIVE_BLOCKING = new Set([
   "AWAY_PID_STALE",
   "TOKEN_FILE_MODE",
   "LOCK_MODULE_MISSING",
-]);
-
-const ENGINE_BLOCKING = new Set([
-  "ENGINE_SPAWN_UNSUPPORTED",
-  "ENGINE_NONE_HEALTHY",
-  "LOCAL_CONTEXT_BELOW_FLOOR",
-  "LOCAL_CONTEXT_UNKNOWN",
 ]);
 
 export type DoctorSeverity = "error" | "warning";
@@ -107,9 +106,13 @@ export function computeHiveReady(input: {
 export function computeEngineRungReady(input: {
   engineFindings: readonly { code: string }[];
   hostDelegateAvailable: boolean;
+  postSliceARungs?: readonly { engineId: string; healthy: boolean }[];
 }): boolean {
-  if (!input.hostDelegateAvailable) return false;
-  return !input.engineFindings.some((item) => ENGINE_BLOCKING.has(item.code));
+  return computeEngineRungReadyFromFindings(
+    input.engineFindings as EngineDoctorFinding[],
+    input.hostDelegateAvailable,
+    input.postSliceARungs ?? [],
+  );
 }
 
 /** True only when the four OD-020 checks passed on this same run. */
@@ -208,11 +211,12 @@ export async function runDoctor(input: RunDoctorInput = {}): Promise<DoctorRepor
     );
   }
 
-  const engineFindings = (input.engineFindings ?? []).map((item) => ({ ...item }));
-  const [hostDispatchQueuesIntent, askMeRoundTrip] = await Promise.all([
+  const [collectedEngineFindings, hostDispatchQueuesIntent, askMeRoundTrip] = await Promise.all([
+    hiveRoot ? collectEngineDoctorFindings(hiveRoot) : Promise.resolve([]),
     probeHostDispatch(),
     probeAskMeRoundTrip(),
   ]);
+  const engineFindings = (input.engineFindings ?? collectedEngineFindings).map((item) => ({ ...item }));
   const boardDispatchInvokesDispatchTask = boardDispatchCheck();
   if (!hostDispatchQueuesIntent && !engineFindings.some((item) => item.code === "ENGINE_NONE_HEALTHY")) {
     engineFindings.push(
@@ -226,9 +230,11 @@ export async function runDoctor(input: RunDoctorInput = {}): Promise<DoctorRepor
   }
 
   const hiveReady = computeHiveReady({ hiveFindings, engineFindings });
+  const postSliceARungs = hiveRoot ? await summarizePostSliceARungs(hiveRoot) : [];
   const engineRungReady = computeEngineRungReady({
     engineFindings,
     hostDelegateAvailable: hostDispatchQueuesIntent,
+    postSliceARungs,
   });
   const checks: SliceAChecks = {
     hiveReady,
