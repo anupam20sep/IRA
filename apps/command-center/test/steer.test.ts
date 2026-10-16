@@ -12,6 +12,7 @@ vi.mock("../src/server/cli.js", () => ({
   runSuperspec: vi.fn(),
 }));
 
+import { isCommandPlaneCommand, runCommandPlaneCli } from "../../../packages/core/src/command-plane/cli-handlers.js";
 import { runSuperspec } from "../src/server/cli.js";
 import {
   steerAbort,
@@ -139,6 +140,20 @@ describe("steer argv", () => {
       "--agent",
       "agent-host",
     ]);
+  });
+
+  it("routes pause, abort, and reassign argv through command-plane commands", async () => {
+    const argvs = [
+      steerArgvPause({ featureId: FEATURE, taskId: TASK }),
+      steerArgvAbort({ featureId: FEATURE, taskId: TASK }),
+      steerArgvReassign({ featureId: FEATURE, taskId: TASK, agentId: "agent-host" }),
+    ];
+    for (const argv of argvs) {
+      expect(isCommandPlaneCommand(argv[0])).toBe(true);
+      const help = await runCommandPlaneCli([argv[0]!, "--help"]);
+      expect(help?.code).toBe(0);
+      expect(help?.stdout).toContain(argv[0]);
+    }
   });
 
   it("does not name forbidden forge commands in the steer module source", () => {
