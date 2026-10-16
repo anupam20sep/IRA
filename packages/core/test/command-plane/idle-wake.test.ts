@@ -6,7 +6,7 @@ import { hiveCiSet } from "../../src/command-plane/blackboard.js";
 import { briefSubmit } from "../../src/command-plane/brief.js";
 import { idleWakeAfterPass, idleWakeUsesDispatchTask } from "../../src/command-plane/dispatch.js";
 import { hiveInit } from "../../src/command-plane/hive-init.js";
-import { HiveLedgerSchema } from "../../src/command-plane/schema.js";
+import { HiveLedgerSchema, RosterAgentSchema } from "../../src/command-plane/schema.js";
 import { loadState, saveState } from "../../src/forge-loop.js";
 import { runCli } from "../../src/cli.js";
 import { buildToolDefinitions } from "../../src/mcp-server.js";
@@ -127,6 +127,42 @@ describe("idleWakeAfterPass", () => {
       expect(events.some((event) => event.type === "task.dispatched" && event.data.internal === true)).toBe(true);
       expect(events.some((event) => event.type === "task.assigned" && event.data.taskId === "T002")).toBe(true);
     }
+  });
+
+  it("assigns an idle tag match instead of a busy finisher", async () => {
+    const repo = await readyPass("T001");
+    await patchTask(repo.hive, "T001", { assigneeAgentId: "agent-host" });
+    await patchTask(repo.hive, "T002", { capabilityTags: ["ui"] });
+    await writeRoster(repo.hive, [
+      rosterAgent("agent-host", "busy", ["ui"]),
+      rosterAgent("idle-match", "idle", ["ui"]),
+    ]);
+
+    const result = await idleWakeAfterPass({
+      hiveExists: true,
+      hiveRoot: repo.hive,
+      featureId: FEATURE,
+      cwd: repo.root,
+      completedTaskId: "T001",
+      passed: true,
+    });
+
+    expect(result).toMatchObject({
+      woke: true,
+      mode: "dispatched",
+      taskId: "T002",
+      via: "dispatch-task",
+      began: true,
+    });
+    const queued = JSON.parse(await readFile(join(repo.hive, "dispatch-queue", FEATURE, "T002.json"), "utf8"));
+    expect(queued.agentId).toBe("idle-match");
+    expect((await readLedger(repo.hive)).tasks.find((task) => task.id === "T002")).toMatchObject({
+      assigneeAgentId: "idle-match",
+      status: "doing",
+    });
+    const events = await readEvents(repo.hive);
+    expect(events.some((event) => event.type === "task.assigned" && event.data.agentId === "idle-match")).toBe(true);
+    expect(events.some((event) => event.type === "task.assigned" && event.data.agentId === "agent-host" && event.data.taskId === "T002")).toBe(false);
   });
 
   it("observe emits task.recommended only", async () => {
@@ -293,6 +329,32 @@ async function readEvents(hive: string): Promise<Array<{ type: string; data: Rec
     .split("\n")
     .filter((line) => line.length > 0)
     .map((line) => JSON.parse(line) as { type: string; data: Record<string, unknown> });
+}
+
+function rosterAgent(
+  id: string,
+  status: "idle" | "busy" | "blocked" | "offline",
+  capabilityTags: string[],
+) {
+  return RosterAgentSchema.parse({
+    id,
+    name: id,
+    personaPath: null,
+    capabilityTags,
+    engine: null,
+    model: null,
+    workspace: null,
+    worktreePolicy: "shared",
+    status,
+    origin: "manual",
+  });
+}
+
+async function writeRoster(
+  hive: string,
+  agents: ReturnType<typeof rosterAgent>[],
+): Promise<void> {
+  await writeFile(join(hive, "roster.json"), JSON.stringify(RosterAgentSchema.array().parse(agents)));
 }
 
 async function patchTask(hive: string, taskId: string, patch: Record<string, unknown>): Promise<void> {

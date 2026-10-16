@@ -345,11 +345,7 @@ async function chooseWakeAssignee(
   task: HiveTask,
   finishedAgentId: string | null,
 ): Promise<RosterAgent | null> {
-  const pool = roster.filter((agent) => {
-    if (agent.status === "offline" || agent.status === "blocked") return false;
-    if (agent.status === "idle") return true;
-    return agent.id === finishedAgentId;
-  });
+  const pool = roster.filter((agent) => agent.status === "idle");
   if (pool.length === 0) return null;
 
   const hooked = await safeMatchCapabilities({ capabilityTags: task.capabilityTags }, pool, {});
