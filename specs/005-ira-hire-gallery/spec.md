@@ -14,6 +14,7 @@
 
 | Path | Reason |
 |------|--------|
+| `docs/superspec/specs/ira-architecture-amendment-2026-10-16.md` | LOCKED production invariants OD-018 (hire confirm/cancel, warning copy); supersedes conflicting P-005 design text |
 | `docs/superspec/specs/2026-09-06-agent-command-plane-requirements.md` §6.5, §8.1, §8.5, §9.2 | HR-* source, hire manifest model, hire journey |
 | `docs/superspec/specs/ira-prior-art-reuse-map.md` | Reuse map — prefer adapt Munder hire modules |
 | `program.md` (P-005) | Program placement and priority |
@@ -41,13 +42,13 @@ Do **not** copy LimeZu pixel assets. Preserve MIT attribution when adapting code
 |-----------|------------|---------|
 | HR-001 | FR-001, FR-002 | Hire specialist via gallery or manifest |
 | HR-002 | FR-002, FR-010 | Manifest fields: identity, goal, capability tags, engine, model tier, budget, skills/MCP allowlists |
-| HR-003 | FR-003 | Never auto-spawn; Operator reviews then confirms |
-| HR-004 | FR-004, FR-011 | Network manifests are untrusted; allowlisted fields only; no executable payload |
+| HR-003 | FR-003, FR-013 | Never auto-spawn; Operator reviews then confirms (curated gallery included) |
+| HR-004 | FR-004, FR-011, FR-013 | Network manifests are untrusted; allowlisted fields only; no executable payload; curated entries same review path |
 | HR-005 | FR-005 | Installed personas discoverable by `list-personas` |
 | HR-006 | FR-006 | Skills install with consent and optional security scan |
 | HR-007 | FR-007 | Route by capability tags, not display name alone |
 | HR-008 | FR-008 | Score hires; surface demotion hints |
-| GD (§5.3) | FR-003, FR-011 | Untrusted hire import escalates to HITL before spawn |
+| GD (§5.3) | FR-003, FR-011, FR-013 | Untrusted hire import escalates to HITL before spawn (curated catalog uses same path) |
 | SS-005 | Assumption | Worktree isolation default for code-writing hires |
 | NFR-002 | FR-004, FR-006, FR-010 | Default-deny skills/MCP; no secrets in manifests |
 
@@ -176,8 +177,10 @@ Over time, the system records hire outcomes (task pass rate, cost vs budget, rev
 - **FR-008**: System SHOULD compute and persist a hire performance score from task outcomes (pass rate, cost vs budget, review failures) and SHOULD surface demotion hints when score falls below threshold without automatically changing roster state. *(HR-008)*
 - **FR-009**: System MUST expose hire flows through Command Plane API (CLI and MCP) so the same review-and-confirm behavior is available without Command Center UI.
 - **FR-010**: System MUST default to deny-all for skills and MCP unless explicitly allowlisted on the manifest or confirmed by Operator during review.
-- **FR-011**: System MUST classify untrusted hire import as HITL-critical: pending imports appear in Ask-Me or equivalent approval surface until Operator confirms or rejects spawn.
+- **FR-011**: System MUST classify untrusted hire import as HITL-critical: pending imports appear in Ask-Me or equivalent approval surface until Operator confirms spawn via `hire-spawn-confirm`, cancels via `hire-spawn-cancel`, or resolves Ask-Me with `action: "acknowledge"` on `reasonClass: "untrusted_import"`, which MUST cancel the review (same effect as cancel: no persona, no roster row) and MUST NOT spawn. *(OD-018)*
 - **FR-012**: Operator MUST be able to edit engine, model tier, budget, goal, capability tags, and allowlists on the review form before spawn; confirmed values become the roster entry source of truth.
+- **FR-013**: Curated gallery entries and remote or shared manifests MUST use the same review path: schema validation, allowlisted fields, executable-payload rejection, a visible sanitization report of equal scope and detail, and explicit Operator confirmation before spawn. A curated entry MUST NOT skip sanitization or HITL. The warning banner string MUST be the single constant `Untrusted import — review all fields before spawn.` for file, URL, paste, and gallery; `approvalCopyVariant: "curated_catalog"` MUST NOT change that string. A curated entry MAY show a separate `trustHint` label (e.g. “curated catalog”); `trustHint` MUST NOT replace or shorten the warning banner. A different warning returns `HIRE_WARNING_LENGTH_MISMATCH` and confirm MUST NOT run. The sanitization report MUST still appear on the review form. A hash or content change MUST be treated as a new untrusted import. *(HR-003, HR-004, §5.3, OD-008, OD-018)*
+- **FR-014**: `hire-spawn-confirm` MUST be the only command that writes portable persona files and upserts a hire roster row (`origin: "hire"`). Ask-Me or any other tool with `action: "acknowledge"` on `untrusted_import` MUST NOT perform spawn writes and MUST return a result that callers treat as cancel (`HIRE_ACK_CANCELS`). Confirm attempted from any path other than `hire-spawn-confirm` returns `HIRE_SPAWN_CONFIRM_REQUIRED`. Until doctor reports `sliceAValidated: true`, `hire-spawn-confirm` MUST no-op with `SLICE_A_ONLY` and perform no persona or roster write. *(OD-018, OD-020)*
 
 ### Key Entities
 
@@ -193,7 +196,7 @@ Over time, the system records hire outcomes (task pass rate, cost vs budget, rev
 ### Measurable Outcomes
 
 - **SC-001**: Operator can complete hire from manifest or gallery through review to confirmed spawn in under three minutes for a standard specialist template.
-- **SC-002**: Zero percent of imports result in agent spawn before explicit Operator confirmation (verified by automated and manual tests).
+- **SC-002**: Zero percent of imports result in agent spawn before explicit Operator confirmation, including curated gallery entries per FR-013 (verified by automated and manual tests).
 - **SC-003**: After confirmed spawn, new hire appears in persona listing output within five seconds under normal local conditions.
 - **SC-004**: When at least one idle hire matches a task’s required capability tag, at least ninety-five percent of routable dispatches in test scenarios assign to a matching hire.
 - **SC-005**: One hundred percent of test manifests containing executable payloads or disallowed content are rejected without roster or persona changes.
@@ -207,9 +210,19 @@ Over time, the system records hire outcomes (task pass rate, cost vs budget, rev
 - Hire scoring v1 uses ledger and forge outcome data already recorded by Command Plane and token features; no new manual Operator data entry.
 - Reuse implementation adapts Munder hire modules where compatible; SuperSpec-specific persona paths and MCP tools remain authoritative.
 - Duplicate hire names, engine availability checks, and tag normalization rules are finalized in architect/refine unless marked below.
+- Gallery trust tiers (OD-008): resolved in FR-013 — same sanitization, HITL, and warning banner for curated and remote imports; only an optional `trustHint` label may differ.
+- Command Center hire mutations (when exposed on the loopback board) follow parent OD-017 bearer token on POST/PUT/PATCH/DELETE; hire behavior in this spec is unchanged aside from that mutation gate.
 
-## Open Clarifications
+## Clarifications
 
-- **[NEEDS CLARIFICATION]**: Gallery trust tiers — should curated gallery entries skip full sanitization warnings or always use the same untrusted-import review path? Default assumption: same review path, lighter copy for curated entries only.
+### Session 2026-10-15
+
+- Q: Gallery trust tiers — should curated gallery entries skip full sanitization warnings or always use the same untrusted-import review path? (OD-008 / FR-013) → A: Same review path for curated catalog entries and remote or shared manifests: schema validation, allowlisted fields, executable-payload rejection, visible sanitization report, and explicit Operator confirmation before spawn. Curated entries MUST NOT skip sanitization or HITL. Banner and sanitization report parity for curated vs remote were locked in Session 2026-10-16 (OD-018). Hash or content change MUST be treated as a new untrusted import.
+
+### Session 2026-10-16
+
+- Q: After `ira-architecture-amendment-2026-10-16`, does Ask-Me `acknowledge` on `untrusted_import` confirm spawn? (OD-018 / FR-011, FR-014) → A: No. `acknowledge` on `reasonClass: "untrusted_import"` cancels the hire review with the same disk effects as `hire-spawn-cancel` (no persona, no roster). Only `hire-spawn-confirm` writes persona and roster. Result payload includes `HIRE_ACK_CANCELS` so UIs do not treat acknowledge as spawn.
+- Q: May curated gallery entries use a shorter trust banner or abbreviated sanitization report? (OD-008 / FR-013, OD-018) → A: No. Warning banner is identical for every `sourceKind`, including gallery: `Untrusted import — review all fields before spawn.` Curated entries MAY add a separate `trustHint` label only; they MUST NOT shorten the banner or the sanitization report. Mismatch returns `HIRE_WARNING_LENGTH_MISMATCH`.
+- Q: Do Command Center hire actions bypass loopback auth? (OD-017 / FR-009) → A: No. Mutating hire controls on the loopback board use the same OD-017 bearer token as other board mutations; CLI and MCP hire tools remain available locally without that header when not routed through the bridge.
 
 <!-- Adapted from SK: templates/spec-template.md (MIT). See /NOTICE. -->

@@ -24,6 +24,7 @@
 | `specs/001-ira-command-plane/spec.md` | Command Plane API + Ask-Me consume budget/breaker events |
 | `specs/002-ira-command-center/spec.md` | Command Center renders spend HUD and worker gauges from this contract |
 | `specs/003-ira-learning-memory/spec.md` | Pattern store MUST survive compaction (LR-006) |
+| `docs/superspec/specs/ira-architecture-amendment-2026-10-16.md` | LOCKED — OD-010 unified `dispatch-task`, OD-015 hook isolation, OD-020 Slice A for P-004 gates |
 | https://munderdiffl.in/blog/command-center-guide/ | Per-agent budgets, steer→constrain→stop, context-window gauges, transcript cost ledger |
 | https://blakecrosley.com/blog/agent-context-compaction | SelfCompact research — semantic task-boundary compaction (cite only, not a dependency) |
 | https://pydantic.dev/docs/ai/harness/compaction/ | Tiered cheap→expensive compaction research (cite only, not a dependency) |
@@ -66,6 +67,9 @@ Prefer **adapt** over invent (OD-004). Formal FRs stay WHAT/WHY; paths below gui
 | CP-001 / Option D | CLI/MCP expose the same state the UI will show | FR-020 |
 | LR-006 | Compaction MUST NOT delete the pattern store | FR-014 |
 | NFR-003 | Local state updates within ~1–2s | SC-006 |
+| OD-010 | One steer path: `dispatch-task` → `TokenHooks.beforeDispatch` → `EngineHooks.dispatch` → internal `begin-task` | FR-024 |
+| OD-015 | Hook throws MUST NOT crash forge or MCP; deny fail-closed | FR-026 |
+| OD-020 | Slice A: `beforeDispatch` gate live; spend/breaker/compaction writes no-op until validated | Clarifications Session 2026-10-16 |
 
 **Explicitly deferred to sibling specs (not FRs here)**: CP/GD/HV hive ownership → P-001; Command Center spend/fleet chrome → P-002; DISTILL/RETRIEVE loop → P-003; hire manifests/budgets-on-hire form → P-005; engine token/quota adapters → P-006; Hermes/OpenClaw → P-007.
 
@@ -180,6 +184,20 @@ Before Ira starts a worker, it forecasts expected cost from similar past spend (
 - What happens in **Observe** mode? Breaker still steers/constrains/stops (safety); dispatch start remains human-initiated; budget-exceed still HITL.
 - What happens if forecast history is from a different engine or wildly different task kind? Do not treat it as similar; fall back to `insufficient-history`.
 - What happens if spend-event parse is partial (tokens without USD, or the reverse)? Persist what is known; mark missing fields; do not drop the event.
+- What happens when failover would land on an engine that cannot emit token signals while a numeric budget is set? Dispatch MUST NOT auto-select that rung; `beforeDispatch` denies or `EngineHooks.dispatch` returns `{ accepted: false }` — no silent unmetered dispatch (FR-025).
+- What happens when `beforeDispatch` throws? The hook boundary catches the exception; forge and MCP stay up; dispatch denies and opens Ask-Me `budget_exceed` (FR-026). A prior successful `saveState` from another command is unchanged.
+
+## Clarifications
+
+### Session 2026-10-16 (OD-010, OD-015, OD-020, budget-metered failover)
+
+Normative: `docs/superspec/specs/ira-architecture-amendment-2026-10-16.md`.
+
+- Q: Where does `TokenHooks.beforeDispatch` run? → A: **Only** on the unified **`dispatch-task`** path (CLI, MCP, board Dispatch control, idle wake, away tick). Fixed order: hive gates → `TokenHooks.beforeDispatch` → `EngineHooks.dispatch` → forge `begin-task` only when the hook allowed and dispatch succeeded. While the hive exists, raw forge `begin-task` MUST NOT invoke budget enforcement or forecast gates; a standalone `begin-task` steer returns `DISPATCH_PATH_REQUIRED` (OD-010).
+- Q: May budget enforcement attach to an optional side path (e.g. wrap `begin-task` only)? → A: No. That path is non-conformant. Idle wake and away dispatch MUST call `dispatch-task`, not argv `begin-task`.
+- Q: When agent or feature has a **numeric budget cap** set, may Ira auto-failover to an engine rung that cannot emit token usage signals? → A: No. Failover ladder changes MUST re-run `beforeDispatch` on the effective engine and model (OD-010 step 5). If the only remaining rung cannot emit token signals, dispatch MUST NOT proceed silently — deny or `{ accepted: false }`; no unmetered spend under an enforced cap (FR-025).
+- Q: What happens when a token hook throws? → A: `registerCommandPlaneHooks` try/catch (OD-015). The exception MUST NOT crash forge, exit the MCP server, or roll back an earlier successful forge write. `beforeDispatch` throw is treated as deny; Command Plane opens Ask-Me **`budget_exceed`** (critical HITL, never silent-auto). Event log MAY record `hook.failed` with reason `HOOK_FAILED_CLOSED` when writable (FR-026).
+- Q: Slice A and P-004 side effects? → A: Until doctor reports `sliceAValidated: true`, **`beforeDispatch` stays live** as a gate: `{ allow: true }` for host-engine dispatch with no spend ledger write; `{ allow: false, reason: "SLICE_A_ONLY" }` for `byok` / `local` supervisor rungs. P-004 spend, breaker side effects, and compaction writes are no-op `SLICE_A_ONLY` with no ledger mutation (OD-020). Forge `record-result` persistence stays live; deferred token hooks on record-result follow Slice A rules in design.
 
 ## Requirements *(mandatory)*
 
@@ -225,6 +243,9 @@ Before Ira starts a worker, it forecasts expected cost from similar past spend (
 - **FR-021**: Existing SuperSpec forge tools (`next-task`, `begin-task`, `record-result`, `sync-status`, `forge-status`, `coordinator-brief`, `route-model`, `build-matrix`, lints) MUST remain valid; this feature MUST extend them rather than replace them. *(SS-002)*
 - **FR-022**: Fresh-subagent dispatch MUST remain the default worker execution model where the host harness supports it; compaction is complementary, not a substitute for fresh workers. *(SS-004)*
 - **FR-023**: Budget-exceed confirmations and circuit-breaker **stop** events MUST be queryable as Command Plane / Ask-Me critical items (same inbox P-001 owns). *(§5.3, GD-003)*
+- **FR-024**: `TokenHooks.beforeDispatch` MUST run **only** as step 4 of unified **`dispatch-task`** (same JSON on CLI and MCP). Steer callers (board Dispatch, idle wake, away tick) MUST call `dispatch-task` and MUST NOT argv raw forge `begin-task` for enforcement. While the hive exists, a `begin-task` call that is not the internal call from `dispatch-task` MUST NOT run budget or forecast gates and MUST return `DISPATCH_PATH_REQUIRED` per P-001. *(OD-010)*
+- **FR-025**: When a **numeric** agent or feature budget cap is set (not null / unlimited), automatic engine failover MUST NOT select a rung that **cannot emit token usage signals** (P-006 capability contract). A failover rung change MUST re-invoke `beforeDispatch` on the effective engine and model before spawn. If no signal-capable rung remains, dispatch MUST deny or return `{ accepted: false }` — MUST NOT substitute silent unmetered dispatch. *(OD-010 step 5, TK-002)*
+- **FR-026**: Token hook implementations MUST assume OD-015 isolation: exceptions in `beforeDispatch`, `recordSpend`, or `onRecordResult` MUST NOT crash forge, exit the MCP server, or undo a prior successful `saveState`. A `beforeDispatch` throw MUST be treated as `{ allow: false, reasonClass: "budget_exceed" }` and MUST open Ask-Me **`budget_exceed`** (critical HITL). *(OD-015, §5.3)*
 
 ### Key Entities
 

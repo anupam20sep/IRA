@@ -8,7 +8,7 @@
 
 **Type**: product
 
-**Input**: User description: "Web Command Center for Ira (GOD board). Consumes Command Plane (P-001). Sci-fi animated tech UI; visual language OPEN. Views: Tasks kanban, Fleet, Activity, Memory/patterns, Spend, Ask-Me, Triggers, Morning brief. Adapt Munder Command Center IA. Voice is P3 / OPEN."
+**Input**: User description: "Web Command Center for Ira (GOD board). Consumes Command Plane (P-001). Ira Glass visual language (OD-001 resolved). Views: Tasks kanban, Fleet, Activity, Memory/patterns, Spend, Ask-Me, Triggers, Morning brief. Adapt Munder Command Center IA. Voice deferred past v1 (OD-003 resolved)."
 
 ## Required Reading
 
@@ -18,12 +18,13 @@
 | `docs/superspec/specs/ira-prior-art-reuse-map.md` | Reuse-first map — adapt Munder Command Center panels before inventing IA |
 | `program.md` | Program P-002 row, OD-001 (visual), OD-003 (voice), OD-004 (prefer adapt) |
 | `specs/001-ira-command-plane/spec.md` | Upstream dependency — Command Plane is the only system of record this board consumes |
+| `docs/superspec/specs/ira-architecture-amendment-2026-10-16.md` | LOCKED production invariants — dispatch path, hold/abort, locks, loopback auth, doctor readiness split (OD-010, OD-011, OD-012, OD-014, OD-017) |
 | `content/templates/constitution.md` | Governance — Test-First and FR ↔ task ↔ test traceability for later plan tasks |
 | `docs/explanation/lifecycle.md` | SuperSpec spine this board oversees; UI must not replace spec → plan → forge → validate → ship |
 
 ## Prior Art (reuse / inspiration)
 
-Prefer **adapting** the Munder board information architecture over inventing a new one. Formal FRs stay WHAT/WHY; paths below guide later `architect` / `forge`. Do not copy LimeZu pixel assets. Do not lock cinematic art direction (OD-001 remains open).
+Prefer **adapting** the Munder board information architecture over inventing a new one. Formal FRs stay WHAT/WHY; paths below guide later `architect` / `forge`. Do not copy LimeZu pixel assets. Visual language is locked to **Ira Glass** at the product level (FR-016); exact color tokens, typeface files, and motion timings are architect/design concerns within that language.
 
 ### Reuse first — Munder Difflin (MIT)
 
@@ -75,7 +76,8 @@ An Operator opens the web Command Center and immediately sees Ira’s management
 
 1. **Given** the Command Plane is reachable and has at least one feature’s tasks and roster, **When** the Operator opens the Command Center, **Then** the board shell is available and the Operator can open Tasks, Fleet, Activity, Memory/patterns, Spend, Ask-Me, and Triggers without using a terminal.
 2. **Given** the Command Plane is reachable but a view’s store is empty (no patterns, no spend events, no triggers), **When** the Operator opens that view, **Then** the view shows an empty state that says nothing is recorded yet — not a fake fleet or fake spend.
-3. **Given** the Command Plane is unreachable, **When** the Operator opens the Command Center, **Then** the board shows a degraded state and does not display invented work.
+3. **Given** the Command Plane is unreachable or `doctor` reports `hiveReady: false`, **When** the Operator opens the Command Center, **Then** the board shows a degraded state and does not display invented work.
+4. **Given** `doctor` reports `hiveReady: true` and `engineRungReady: false`, **When** the Operator opens the Command Center, **Then** the board remains usable for views and hive-backed steer controls and surfaces engine degradation separately without blanking the whole board.
 
 ---
 
@@ -90,7 +92,7 @@ An Operator uses the Tasks view as a dependency-aware kanban and steers the floo
 **Acceptance Scenarios**:
 
 1. **Given** a task whose dependencies are satisfied and whose status is ready, **When** the Operator views Tasks, **Then** that task is visually distinguishable from tasks still waiting on unmet dependencies.
-2. **Given** a ready or in-progress task on the board, **When** the Operator dispatches, pauses, aborts, or reassigns it from the Command Center, **Then** the Command Plane records the same action and the kanban reflects the new status without the Operator using a CLI.
+2. **Given** a ready or in-progress task on the board, **When** the Operator dispatches (`dispatch-task`), pauses (`task-hold`), aborts (`task-abort` with confirmation), or reassigns (`task-reassign`) from the Command Center with a valid loopback bearer token, **Then** the Command Plane records the same action (including a reassign event) and the kanban reflects the new status without the Operator using a terminal CLI directly.
 3. **Given** a task that is waiting on an unmet dependency, **When** the Operator views Tasks, **Then** the board does not present that task as ready to start.
 
 ---
@@ -223,35 +225,35 @@ An Operator uses Triggers to see idle-wake and night/away schedules the Command 
 
 ---
 
-### User Story 11 - Sci-fi ops surface without locked art direction (Priority: P2)
+### User Story 11 - Ira Glass ops surface (Priority: P2)
 
-An Operator experiences the Command Center as an animated, technical, sci-fi operations surface that is original to SuperSpec — not a stock cinematic-assistant clone and not a pixel office. Exact visual language stays open.
+An Operator experiences the Command Center through the locked **Ira Glass** visual language: holographic glass panels on a near-black graphite field, mission-control density with monospaced telemetry and status lamps (cool for done or healthy, amber for Ask-Me attention, red only for blocked or stop), and a single small arc-inspired Ira presence core used only as Ira’s chrome and brief anchor. Motion is limited to short panel reveals and status-lamp pulses.
 
-**Why this priority**: UI-002 is in vision for this feature, but OD-001 forbids silently locking art direction during scope. The story is independently reviewable as spirit and originality, not as a finished style guide.
+**Why this priority**: UI-002 requires a distinctive SuperSpec ops surface. OD-001 is resolved to Ira Glass so the board is independently reviewable against a concrete visual contract without cloning kits or franchises.
 
-**Independent Test**: Review the running board (or a visual prototype of the shell) against the non-clone / non-office rules. No requirement that a named aesthetic be implemented.
+**Independent Test**: Review the running board (or visual prototype of the shell) for Ira Glass elements and forbidden looks. Confirm motion stays within short panel reveals and status-lamp pulses.
 
 **Acceptance Scenarios**:
 
-1. **Given** the Command Center is open, **When** a reviewer assesses the surface, **Then** the board is recognizably animated and technical (motion, depth, or living status — not a static unstyled form dump).
-2. **Given** the same review, **When** the reviewer compares the surface to a stock cinematic-assistant HUD or a pixel office floor, **Then** the Command Center is not a replica of either.
-3. **Given** OD-001 is still open, **When** this story is accepted, **Then** no palette, typeface, or franchise look is treated as the locked product identity.
+1. **Given** the Command Center is open, **When** a reviewer assesses the surface, **Then** holographic glass panels on a near-black graphite field are visible with monospaced telemetry and status lamps using cool, amber, and red semantics as specified.
+2. **Given** the same review, **When** the reviewer compares the surface to a stock cinematic-assistant clone, a KITT scanner-bar identity, a Marvel or arc-reactor HUD kit, a holographic-dashboard kit skin, or a pixel office, **Then** the Command Center is not a replica of any of them.
+3. **Given** the Command Center is open, **When** the reviewer looks for Ira identity chrome, **Then** exactly one small arc-inspired Ira presence core is used as Ira’s chrome and brief anchor — not duplicated as the primary layout on every panel.
 
 ---
 
-### User Story 12 - Voice to Ira (Priority: P3)
+### User Story 12 - Voice to Ira *(deferred past v1)*
 
-An Operator may speak a brief, ask for status, or approve an Ask-Me item by voice. Voice never silently spends, spawns, or performs destructive actions.
+Voice briefing, spoken status, and spoken Ask-Me approval are out of scope for v1 Command Center. v1 MUST complete every Operator journey by pointing and typing and MUST NOT ship speech-to-text, speech synthesis, or a wake-word. Constraints for a later voice release are captured in FR-021.
 
-**Why this priority**: UI-007 is in product vision; OD-003 defers timing and speech approach. Voice must not gate any P1 journey.
+**Why this priority**: UI-007 remains in product vision; OD-003 resolves that voice does not gate v1. P1 journeys are pointer-and-keyboard complete.
 
-**Independent Test**: If voice is not built, this story is demonstrated as absent-but-specified (P1 journeys complete by pointing and typing). If a voice path exists, demonstrate status, brief, and approve — and demonstrate that a spoken spend/spawn is refused without confirmation.
+**Independent Test**: Use v1 Command Center only. Demonstrate every P1 journey without any voice UI, STT, TTS, or wake-word.
 
 **Acceptance Scenarios**:
 
-1. **Given** voice is not enabled, **When** the Operator uses the Command Center, **Then** every P1 journey still completes by pointing and typing.
-2. **Given** voice is enabled, **When** the Operator speaks a request for status or a brief, **Then** Ira responds with a board-visible result (brief or status), not an unattended side effect.
-3. **Given** voice is enabled, **When** the Operator’s speech would spend over budget, spawn a hire, or perform a destructive action, **Then** the system refuses silent execution and requires an explicit confirmation the Operator can still cancel.
+1. **Given** v1 Command Center, **When** the Operator uses the board, **Then** every P1 journey completes by pointing and typing and no voice capture or playback UI is shipped.
+2. **Given** v1 Command Center, **When** the Operator opens settings or chrome, **Then** there is no wake-word, speech-to-text, or speech-synthesis control enabled for Ira interactions.
+3. **Given** a future voice release (post-v1), **When** voice is added, **Then** it MUST follow FR-021 (no silent spend/spawn/destructive actions; ambiguous utterances do not count as approval) — not exercised in v1 acceptance.
 
 ---
 
@@ -267,6 +269,7 @@ An Operator may speak a brief, ask for status, or approve an Ask-Me item by voic
 - What happens if the Operator aborts a task that is already done? The board MUST refuse or no-op with an explanation; it MUST NOT rewrite a completed result as aborted unless the Command Plane allows that transition.
 - What happens if the Operator reassigns to an offline worker? The board MUST warn and MUST NOT present the reassignment as a successful dispatch.
 - How does the morning brief behave with zero work in the ledger? It MUST say nothing is in flight (zero done, zero blocked) rather than failing to open.
+- What happens when the Operator steers without a valid loopback bearer token? The bridge MUST return `401` `TOKEN_REQUIRED`, MUST NOT spawn CLI, and MUST NOT write the hive.
 - What happens if voice is misheard as approve? The system MUST NOT treat an ambiguous utterance as approval of spend, spawn, or destructive work.
 
 ## Requirements *(mandatory)*
@@ -282,18 +285,20 @@ An Operator may speak a brief, ask for status, or approve an Ask-Me item by voic
 - **FR-007**: Command Center MUST provide an Ask-Me/approvals inbox for critical human-in-the-loop items and MUST make those escalations visible on the board (parent UI-001, GD-003, GD-008).
 - **FR-008**: Command Center MUST provide a Triggers/schedules view of idle-wake and night/away commitments the Command Plane will honor (parent UI-001).
 - **FR-009**: Command Center MUST provide a morning/status brief that summarizes done, blocked, spend, quota when known, open escalations, and next triggers (parent UI-004).
-- **FR-010**: Operator MUST be able to dispatch, pause, abort, and reassign work from the Command Center (parent UI-005).
+- **FR-010**: Operator MUST be able to dispatch, pause, abort, and reassign work from the Command Center by invoking Command Plane CLI/MCP commands only: `dispatch-task` for dispatch (MUST NOT argv raw forge `begin-task` while the hive exists); `task-hold` with `hold: true` for pause; `task-abort` with `confirm: true` for abort; `task-reassign` for reassign. Pause and abort MUST NOT call `record-result --passed false` and MUST NOT increment `reviewFailures`. The board MUST NOT write ledger files, lock files, or a local `withLock` copy (parent UI-005, amendment OD-010, OD-011, OD-012).
+- **FR-010a**: Every mutating HTTP request from the Command Center bridge (POST, PUT, PATCH, DELETE), including steer, brief submit, and Ask-Me answer, MUST include header `Authorization: Bearer <token>` matching `<hiveRoot>/auth/loopback.token` (file mode `0600`, directory `0700`). Missing or invalid token MUST return `401` `TOKEN_REQUIRED` and MUST NOT spawn CLI or write the hive (amendment OD-017). Query-string tokens are forbidden. The token MUST NOT appear in events, bridge logs, or HTML.
+- **FR-010b**: Degraded gating for an open board MUST use `doctor.hiveReady` for full-plane degradation. `engineRungReady: false` MUST surface engine-run degradation (banner or Fleet/Tasks copy) and MUST NOT by itself force an empty or unreachable board when hive coordination data is healthy (amendment OD-014).
 - **FR-011**: Operator MUST be able to answer Ask-Me items from the Command Center without using a terminal (parent UI-005).
 - **FR-012**: Operator MUST be able to submit a goal brief (outcome, constraints, budget, deliverable) to Ira from the Command Center (parent GD-001, journey 9.1).
 - **FR-013**: While the Command Center remains open, presented state MUST stay current with the Command Plane so the Operator does not need a full restart to see new status (parent UI-003, NFR-003).
 - **FR-014**: Fleet worker cards MUST show a context-window (or equivalent remaining-capacity) gauge when the Command Plane provides a measurement (parent TK-004).
 - **FR-015**: Command Center MUST treat the management board as the primary fleet surface; a spatial or ambient “floor” view MAY exist later and MUST NOT replace the board (parent UI-006).
-- **FR-016**: Command Center MUST present an animated, sci-fi, technical operations surface that is original to SuperSpec (not a stock cinematic-assistant clone and not a pixel office). Exact visual language is [NEEDS CLARIFICATION: OD-001 / OPEN-001 — Operator has not locked art direction; KITT / arc-reactor / holographic-glass inspiration is allowed; do not treat any kit or franchise look as the product identity].
+- **FR-016**: Command Center MUST present the locked **Ira Glass** visual language: holographic glass panels on a near-black graphite field, mission-control density with monospaced telemetry and status lamps (cool for done or healthy, amber for Ask-Me attention, red only for blocked or stop), and a single small arc-inspired Ira presence core used only as Ira’s chrome and brief anchor. Motion MUST be limited to short panel reveals and status-lamp pulses. The surface MUST be original to SuperSpec and MUST NOT be a stock cinematic-assistant clone, a KITT scanner-bar identity, a Marvel or arc-reactor HUD kit, a holographic-dashboard kit skin, or a pixel office. Exact color tokens, typeface files, and motion timings are an architect/design concern within this language. *(UI-002, OPEN-001 resolved)*
 - **FR-017**: Command Center MUST identify Ira (Intelligent Resource Automation) as the GOD floor director in chrome and brief copy, using the callsign **Ira** (title case), never all-caps IRA in UI chrome.
 - **FR-018**: Command Center MUST consume the same Command Plane state an operator can read without the UI, and MUST NOT become a second system of record for tasks, roster, spend, patterns, or approvals (parent CP-002, Option D).
 - **FR-019**: Command Center MUST remain fully usable with neither Hermes nor OpenClaw installed (parent INT-003).
 - **FR-020**: When the Command Plane is unreachable or a view’s store is empty, Command Center MUST show a degraded or empty state and MUST NOT fabricate tasks, agents, spend, patterns, triggers, or approvals.
-- **FR-021**: Operator MAY brief Ira, request status, and approve Ask-Me items by voice. Voice MUST NOT silently spend, spawn a hire, or perform destructive actions. Delivery timing and speech approach are [NEEDS CLARIFICATION: UI-007 / OD-003 — voice is in product vision; speech-to-text, speech synthesis, and wake-word are unset; treat as P3 and do not block P1 journeys].
+- **FR-021**: Voice briefing, spoken status, and spoken Ask-Me approval are deferred past v1 Command Center. v1 MUST complete every Operator journey by pointing and typing and MUST NOT ship speech-to-text, speech synthesis, or a wake-word. When voice is added later, it MUST NOT silently spend, spawn a hire, or perform a destructive action, and an ambiguous utterance MUST NOT count as approval. *(UI-007, OD-003 resolved)*
 - **FR-022**: Command Center MUST use a Munder-like board information architecture (shell + GOD panels) as the default layout; the Operator MUST NOT be required to learn a novel IA to reach Tasks, Fleet, Ask-Me, Memory, or Spend.
 - **FR-023**: Routine automation events MUST NOT appear as Ask-Me items that require an answer (parent §5.3 routine vs critical).
 - **FR-024**: Morning brief copy MUST lead with numbers (done / blocked / spend / quota-or-unknown / what needs the human) in Ira’s calm, clipped voice; address defaults to Operator and MUST NOT force a cinematic “sir.”
@@ -305,12 +310,12 @@ An Operator may speak a brief, ask for status, or approve an Ask-Me item by voic
 |-----------|-------------------|-------|
 | CP-002 | FR-001, FR-018 | Web board consumes Command Plane; no second ledger |
 | UI-001 | FR-002, FR-003, FR-004, FR-005, FR-006, FR-007, FR-008 | Seven GOD views |
-| UI-002 | FR-016 | Visual spirit required; art direction OPEN |
+| UI-002 | FR-016 | Ira Glass visual language locked (OPEN-001 resolved) |
 | UI-003 | FR-013 | Live board while open |
 | UI-004 | FR-009, FR-024 | Morning/status brief |
-| UI-005 | FR-010, FR-011 | Steer + answer Ask-Me |
+| UI-005 | FR-010, FR-010a, FR-010b, FR-011 | Steer + loopback auth + doctor split + answer Ask-Me |
 | UI-006 | FR-015 | Board primary; floor optional later |
-| UI-007 | FR-021 | Voice = P3 / OPEN |
+| UI-007 | FR-021 | Voice deferred past v1 (OD-003 resolved) |
 | GD-001 | FR-012 | Brief from the board |
 | GD-003 | FR-007, FR-011, FR-023 | Ask-Me inbox, not terminal spam |
 | GD-008 | FR-007 | Escalations visible on the board |
@@ -318,7 +323,7 @@ An Operator may speak a brief, ask for status, or approve an Ask-Me item by voic
 | TK-004 | FR-014 | Context-window gauge on worker cards |
 | INT-003 | FR-019 | No Hermes / OpenClaw required |
 | SS-001 | FR-025 | Lifecycle works without the UI |
-| NG3 / NG6 | FR-015, FR-016 | No pixel-office primary UX; no silent art lock |
+| NG3 / NG6 | FR-015, FR-016 | No pixel-office primary UX; Ira Glass locked, not kit/franchise clone |
 
 Related parent IDs **not** specified here (sibling features own them): CP-001, HV-*, LR-*, TK-001–003 and TK-005–009 write path, HR-*, EN-* adapters, INT-001/002/004/005, DX-001–002. This board **displays** spend, patterns, engines, and triggers when the Command Plane exposes them.
 
@@ -348,23 +353,39 @@ Related parent IDs **not** specified here (sibling features own them): CP-001, H
 - **SC-005**: A morning brief drawn from seeded state always includes done count, blocked count, spend, escalations (or explicit “none”), and next triggers (or explicit “none”); quota is a number or explicit unknown (never a guessed value).
 - **SC-006**: In 100% of unreachable-Plane and empty-store cases exercised, the board shows degraded or empty UI and invents zero tasks, agents, spend lines, patterns, or approvals.
 - **SC-007**: 100% of P1 acceptance scenarios pass with voice disabled or absent.
-- **SC-008**: A visual review records that the board is animated and technical, and that it is not a stock cinematic-assistant clone and not a pixel office; no art-direction lock is claimed while OD-001 is open.
+- **SC-008**: A visual review records holographic glass panels on a near-black graphite field, monospaced telemetry and status lamps (cool / amber / red semantics), exactly one small arc-inspired Ira presence core as Ira’s chrome and brief anchor, motion limited to short panel reveals and status-lamp pulses, and that the surface is not a stock cinematic-assistant clone, a KITT scanner-bar identity, a Marvel or arc-reactor HUD kit, a holographic-dashboard kit skin, or a pixel office.
 - **SC-009**: 100% of open critical Ask-Me items present on the Command Plane are visible from the board (inbox or equivalent chrome) before the Operator is forced to a terminal.
 - **SC-010**: With the Command Center closed, an Operator can still run the SuperSpec lifecycle from CLI/MCP (board not a required control).
+
+## Clarifications
+
+### Session 2026-10-15
+
+- **OD-001 (visual language)**: Resolved to locked **Ira Glass** per FR-016 — holographic glass on near-black graphite, mission-control telemetry and status lamps, single small arc-inspired Ira presence core; forbidden looks enumerated in FR-016/SC-008. Exact color tokens, typeface files, and motion timings remain architect/design within this language. *(UI-002, OPEN-001 resolved.)*
+- **OD-003 (voice)**: Deferred past v1 Command Center. v1 completes all Operator journeys by pointing and typing; no speech-to-text, speech synthesis, or wake-word in v1. Future voice constraints per FR-021. *(UI-007 resolved for v1 scope.)*
+
+### Session 2026-10-16
+
+- **OD-010 (one dispatch path)**: The board Dispatch control’s only steer mutation is `dispatch-task` (same JSON as CLI/MCP). While the hive exists, the bridge MUST NOT argv forge `begin-task` for operator dispatch. Internal `begin-task` runs only inside `dispatch-task` after hooks allow. *(Amendment `ira-architecture-amendment-2026-10-16.md`.)*
+- **OD-016 (learning non-blocking)**: The Command Center MUST NOT block steer or snapshot refresh waiting on DISTILL or CONSOLIDATE. Activity and Memory views reflect hive/Plane state already recorded; pattern index unavailability does not fail board reads. *(Amendment; display-only for P-002.)*
+- **OD-017 (loopback auth)**: Bridge binds `127.0.0.1` only. Token file `<hiveRoot>/auth/loopback.token` mode `0600`. Every mutating POST/PUT/PATCH/DELETE requires `Authorization: Bearer <token>`. GET and SSE do not accept query-string tokens. *(Amendment; OPEN-007 multi-user auth stays open.)*
+- **OD-011 (hold ≠ fail)**: Pause invokes `task-hold` (`hold: true`); abort invokes `task-abort` (`confirm: true`). Neither invokes `record-result` or increments `reviewFailures`. *(Amendment.)*
+- **OD-012 (locks)**: Reassign and all hive writes from the board go through Plane `task-reassign` (core `withLock`); the Command Center MUST NOT implement lock files or patch ledger JSON directly. *(Amendment.)*
+- **OD-014 (doctor split)**: Snapshot degradation uses `hiveReady`; `engineRungReady` is shown separately and MUST NOT blank the board when the hive is healthy. *(Amendment.)*
 
 ## Assumptions
 
 - This feature **depends on P-001 (ira-command-plane)**. The board reads and steers only through Command Plane state; it does not implement hive, GOD routing, or ledgers.
 - **Information architecture** adapts Munder `CommandCenterPanel` (shell + Tasks / Workers / Ask-Me / Memory / Cost panels), adding Activity, Triggers, and the morning brief rather than inventing a new IA.
-- **Visual language stays OPEN** (OD-001). Scope records spirit and non-clone rules only. Refine/design must not silently pick a final look.
-- **Voice is P3 / OPEN** (OD-003, UI-007). P1/P2 journeys are pointer-and-keyboard complete.
-- **Access model**: v1 is a local, single-Operator board (localhost-class). Shareable teammate URLs and multi-user auth are P-007 / OPEN-007, out of scope here.
+- **Visual language is Ira Glass** (OD-001 resolved). Product-level look is locked in FR-016; architect/design owns tokens, typefaces, and motion timings within that language.
+- **Voice is deferred past v1** (OD-003 resolved). P1/P2 journeys are pointer-and-keyboard complete; FR-021 states post-v1 voice constraints.
+- **Access model**: v1 is a local, single-Operator board bound to `127.0.0.1` only. Loopback bearer token (OD-017) gates every mutation; it is a local mutation gate, not multi-user auth. Shareable teammate URLs and user-directory auth remain P-007 / OPEN-007, out of scope here.
 - **No Electron requirement**. A browser-opened local web Command Center satisfies CP-002.
 - **Mobile layout** is out of scope for v1; a desktop-width board is sufficient.
 - **Spatial / ambient floor** is out of scope for v1 (UI-006 MAY later).
 - **Hire gallery, engine adapters, pattern-store internals, and budget-enforcement logic** belong to P-005, P-006, P-003, and P-004. This board displays what those planes expose and offers empty states when they do not.
 - Changing numeric budgets, installing skills, and importing hires are not required P1 actions on this board.
-- Abort and critical approvals require an explicit Operator confirmation; pause and dispatch of **ready** work do not.
+- Abort and critical approvals require an explicit Operator confirmation; pause and dispatch of **ready** work do not. Pause sets hive `hold` via `task-hold` and does not count as a failed review.
 - Default address in copy is **Operator** (configurable later). Never force “sir.”
 - Last-used GOD view MAY be remembered; the morning brief remains reachable without hunting.
 - Telemetry of prompts/code stays off by default (parent DX-003).
@@ -376,7 +397,7 @@ Related parent IDs **not** specified here (sibling features own them): CP-001, H
 - Replacing Claude Code, Cursor, or Codex as the code-writing runtime (NG1).
 - A general personal assistant (calendar, home IoT) (NG2).
 - A pixel office / Sims floor as the primary UX (NG3).
-- Locking cinematic art direction in this spec (NG6, OD-001).
+- Shipping voice briefing, STT, TTS, or wake-word in v1 Command Center (OD-003 resolved deferral).
 - Requiring Hermes or OpenClaw (NG5, INT-003).
 - Owning Command Plane APIs, hive protocol, learning pipeline, or engine adapters (P-001, P-003, P-004, P-006).
 

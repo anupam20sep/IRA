@@ -5,9 +5,8 @@ import { join } from "node:path";
 import { z } from "zod";
 import { openAskMeItem } from "./ask-me.js";
 import { safeOnUntrustedImport } from "./hooks.js";
-import { agentIdSchema, AskMeReasonClassSchema, featureIdSchema } from "./schema.js";
+import { agentIdSchema, AskMeReasonClassSchema, featureIdSchema, IraEventSchema } from "./schema.js";
 import { EVENT_LOCK_WAIT_MS, appendJsonlLine, lockWaitMs, withLock } from "./store.js";
-import { IraEventSchema } from "./schema.js";
 import type { AskMeReasonClass, CommandPlaneErrorCode } from "./types.js";
 
 const MAX_BODY = 65536;
