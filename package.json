@@ -4,7 +4,7 @@
   "private": true,
   "type": "module",
   "engines": { "node": ">=20" },
-  "workspaces": ["packages/*"],
+  "workspaces": ["packages/*", "apps/*"],
   "scripts": {
     "build": "tsc -b",
     "render": "node packages/render/dist/cli.js",
@@ -15,5 +15,8 @@
     "@types/node": "^20.11.0",
     "typescript": "^5.5.0",
     "vitest": "^2.0.0"
+  },
+  "pnpm": {
+    "onlyBuiltDependencies": ["esbuild"]
   }
 }
