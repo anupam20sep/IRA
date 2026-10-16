@@ -1,5 +1,6 @@
 import type { BoardSnapshot } from "../shared/snapshot-types.js";
 import { renderShell, type ShellView } from "./shell.js";
+import { renderTasksView } from "./views/tasks.js";
 
 const REFETCH_PREFIXES = ["task.", "ask_me.", "brief.", "away.", "autonomy.", "hive."] as const;
 
@@ -253,11 +254,20 @@ export function bootstrapClient(deps: BootstrapDeps): CommandCenterClient {
   let snapshot: BoardSnapshot | null = null;
   let presentationStale = false;
 
+  let postMutationRef: (path: string, init?: Omit<RequestInit, "method">) => Promise<Response> =
+    async () => new Response(null, { status: 500 });
+
   const mountCurrentView = () => {
     const view = currentViewFromLocation();
     storage.setItem(VIEW_SESSION_KEY, view);
     const host = root.querySelector("[data-view-host]") as HTMLElement | null;
     if (!host || !snapshot) return;
+    if (view === "tasks") {
+      const steerDisabled =
+        presentationStale || snapshot.stale || snapshot.doctor.hiveReady !== true;
+      renderTasksView(host, snapshot, { postMutation: postMutationRef, steerDisabled });
+      return;
+    }
     VIEW_MOUNTS[view](host, snapshot);
   };
 
@@ -317,6 +327,7 @@ export function bootstrapClient(deps: BootstrapDeps): CommandCenterClient {
     }
     return response;
   };
+  postMutationRef = postMutation;
 
   void refetchSnapshot();
   live.connect();
