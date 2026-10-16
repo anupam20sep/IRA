@@ -4,6 +4,11 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { runCli } from "../src/cli.js";
 import * as mcpServer from "../src/mcp-server.js";
+import { hiveInit } from "../src/command-plane/hive-init.js";
+import { HiveLedgerSchema, RosterAgentSchema } from "../src/command-plane/schema.js";
+import { awaySet } from "../src/command-plane/away.js";
+import type { HiveTask, RosterAgent } from "../src/command-plane/types.js";
+import { saveState } from "../src/forge-loop.js";
 
 let root: string;
 beforeEach(async () => {
@@ -221,6 +226,145 @@ describe("runCli mcp", () => {
       spy.mockRestore();
     }
   });
+});
+
+describe("cli dispatch-task help", () => {
+  it("registers dispatch-task subcommand", async () => {
+    const out = await runCli(["dispatch-task", "--help"]);
+    expect(out.stdout).toMatch(/dispatch-task/);
+  });
+});
+
+describe("runCli command-plane JSON", () => {
+  const priorSuperspecRoot = process.env.SUPERSPEC_ROOT;
+  const NOW = "2026-10-16T12:00:00.000Z";
+  const FEATURE = "001-demo";
+  const PLAN =
+    "### Task T001: Alpha\n**Implements:** FR-030\n**Depends on:** none\n**Kind:** code\n**Complexity:** mechanical\n";
+
+  afterEach(async () => {
+    if (priorSuperspecRoot === undefined) delete process.env.SUPERSPEC_ROOT;
+    else process.env.SUPERSPEC_ROOT = priorSuperspecRoot;
+    const hive = join(root, ".superspec", "hive");
+    await awaySet({ hiveRoot: hive, awayMode: false }).catch(() => undefined);
+  });
+
+  it("task hold prints a JSON envelope", async () => {
+    await seedHive();
+    const { code, stdout } = await runCli([
+      "task",
+      "hold",
+      "--cwd",
+      root,
+      "--feature",
+      FEATURE,
+      "--task",
+      "T001",
+      "--hold",
+      "true",
+    ]);
+    expect(code).toBe(0);
+    const parsed = JSON.parse(stdout);
+    expect(parsed).toMatchObject({ ok: true, task: { id: "T001", hold: true } });
+  });
+
+  it("task abort without confirm returns ok false JSON", async () => {
+    await seedHive();
+    const { code, stdout } = await runCli([
+      "task",
+      "abort",
+      "--cwd",
+      root,
+      "--feature",
+      FEATURE,
+      "--task",
+      "T001",
+      "--reason",
+      "stop",
+    ]);
+    expect(code).toBe(1);
+    const parsed = JSON.parse(stdout);
+    expect(parsed).toMatchObject({ ok: false, error: "INVALID_INPUT" });
+  });
+
+  it("away on accepts --allow-absent-ci true in JSON settings", async () => {
+    await seedHive();
+    const { code, stdout } = await runCli([
+      "away",
+      "on",
+      "--cwd",
+      root,
+      "--allow-absent-ci",
+      "true",
+    ]);
+    expect(code).toBe(0);
+    const parsed = JSON.parse(stdout);
+    expect(parsed.settings.allowAbsentCi).toBe(true);
+  });
+
+  it("doctor prints JSON with persona", async () => {
+    await seedHive();
+    const { code, stdout } = await runCli(["doctor", "--cwd", root]);
+    expect(code).toBe(0);
+    const parsed = JSON.parse(stdout);
+    expect(parsed.ok).toBe(true);
+    expect(parsed.persona).toMatchObject({ callsign: "Ira" });
+  });
+
+  async function seedHive(): Promise<void> {
+    await writeFile(join(root, "program.md"), "# p\n", "utf8");
+    process.env.SUPERSPEC_ROOT = root;
+    const init = await hiveInit({ cwd: root });
+    expect(init.ok).toBe(true);
+    const specDir = join(root, "specs", FEATURE);
+    await mkdir(specDir, { recursive: true });
+    await writeFile(join(specDir, "plan.md"), PLAN, "utf8");
+    await saveState(specDir, { tasks: { T001: { status: "pending", reviewFailures: 0 } } });
+    const hive = join(root, ".superspec", "hive");
+    const roster: RosterAgent[] = [
+      {
+        id: "agent-host",
+        name: "agent-host",
+        personaPath: null,
+        capabilityTags: [],
+        engine: null,
+        model: null,
+        workspace: null,
+        worktreePolicy: "shared",
+        status: "idle",
+        origin: "manual",
+      },
+    ];
+    await writeFile(join(hive, "roster.json"), `${JSON.stringify(RosterAgentSchema.array().parse(roster))}\n`);
+    const task: HiveTask = {
+      id: "T001",
+      featureId: FEATURE,
+      title: "Alpha",
+      implementsFr: ["FR-030"],
+      dependsOn: [],
+      assigneeAgentId: "agent-host",
+      status: "todo",
+      kind: "code",
+      complexity: "mechanical",
+      reviewFailures: 0,
+      hold: false,
+      ceiling: 3,
+      drift: "ok",
+      replan: null,
+      capabilityTags: [],
+      updatedAt: NOW,
+    };
+    const ledger = HiveLedgerSchema.parse({
+      featureId: FEATURE,
+      planPath: `specs/${FEATURE}/plan.md`,
+      specDir: `specs/${FEATURE}`,
+      maxReviewFailures: 3,
+      updatedAt: NOW,
+      tasks: [task],
+    });
+    await mkdir(join(hive, "ledger"), { recursive: true });
+    await writeFile(join(hive, "ledger", `${FEATURE}.json`), `${JSON.stringify(ledger)}\n`);
+  }
 });
 
 describe("runCli list-personas", () => {

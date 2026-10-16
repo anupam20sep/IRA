@@ -50,6 +50,11 @@ import {
 } from "./cli-output.js";
 import { isDirectRun } from "./cli-entry.js";
 import { writeStatusFile } from "./fr-status.js";
+import {
+  commandPlaneHelpSummary,
+  isCommandPlaneCommand,
+  runCommandPlaneCli,
+} from "./command-plane/cli-handlers.js";
 
 export interface CliResult {
   code: number;
@@ -71,6 +76,11 @@ export async function runCli(argv: string[], options?: RunCliOptions): Promise<C
 
 async function runCliInner(argv: string[], options?: RunCliOptions): Promise<CliResult> {
   const [command, ...rest] = argv;
+
+  if (isCommandPlaneCommand(command)) {
+    const cp = await runCommandPlaneCli(argv);
+    if (cp !== null) return cp;
+  }
 
   if (command === "mcp") {
     // Long-running: connects the MCP server to stdio and never resolves in
@@ -534,7 +544,7 @@ async function runCliInner(argv: string[], options?: RunCliOptions): Promise<Cli
 
   return {
     code: 0,
-    stdout: `Unknown command: ${command ?? "(none)"}. Try: init | matrix | lint | scaffold | list-personas | coordinator-init | coordinator-brief | next-task | begin-task | record-result | sync-status | forge-status | mcp`,
+    stdout: `Unknown command: ${command ?? "(none)"}. Try: init | matrix | lint | scaffold | list-personas | coordinator-init | coordinator-brief | next-task | begin-task | record-result | sync-status | forge-status | ${commandPlaneHelpSummary()} | mcp`,
   };
 }
 
