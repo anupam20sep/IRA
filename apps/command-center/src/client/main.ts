@@ -1,5 +1,7 @@
 import type { BoardSnapshot } from "../shared/snapshot-types.js";
 import { renderShell, type ShellView } from "./shell.js";
+import { renderFleetView } from "./views/fleet.js";
+import { renderAskMeView } from "./views/ask-me.js";
 import { renderTasksView } from "./views/tasks.js";
 
 const REFETCH_PREFIXES = ["task.", "ask_me.", "brief.", "away.", "autonomy.", "hive."] as const;
@@ -266,6 +268,14 @@ export function bootstrapClient(deps: BootstrapDeps): CommandCenterClient {
       const steerDisabled =
         presentationStale || snapshot.stale || snapshot.doctor.hiveReady !== true;
       renderTasksView(host, snapshot, { postMutation: postMutationRef, steerDisabled });
+      return;
+    }
+    if (view === "fleet") {
+      renderFleetView(host, snapshot);
+      return;
+    }
+    if (view === "ask-me") {
+      renderAskMeView(host, snapshot, { postMutation: postMutationRef });
       return;
     }
     VIEW_MOUNTS[view](host, snapshot);
