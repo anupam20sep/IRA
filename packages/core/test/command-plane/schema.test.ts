@@ -2,6 +2,7 @@ import { describe, it, expect } from "vitest";
 import {
   AutonomySettingsSchema,
   HiveManifestSchema,
+  HiveLedgerSchema,
   HiveTaskSchema,
   AskMeItemSchema,
   IraEventSchema,
@@ -65,6 +66,39 @@ describe("HiveTaskSchema", () => {
       updatedAt: "2026-10-15T00:00:00.000Z",
     });
     expect(t.abortReason).toBe("operator stop");
+  });
+});
+
+describe("HiveLedgerSchema", () => {
+  it("parses ledger envelope with nested tasks", () => {
+    const ledger = HiveLedgerSchema.parse({
+      featureId: "001-ira-command-plane",
+      planPath: "specs/001-ira-command-plane/plan.md",
+      specDir: "specs/001-ira-command-plane",
+      maxReviewFailures: 3,
+      updatedAt: "2026-10-15T00:00:00.000Z",
+      tasks: [
+        {
+          id: "T001",
+          featureId: "001-ira-command-plane",
+          title: "Hive Zod schemas",
+          implementsFr: ["FR-012"],
+          dependsOn: [],
+          assigneeAgentId: null,
+          status: "todo",
+          kind: "code",
+          complexity: "moderate",
+          reviewFailures: 0,
+          ceiling: 3,
+          drift: "ok",
+          capabilityTags: [],
+          updatedAt: "2026-10-15T00:00:00.000Z",
+        },
+      ],
+    });
+    expect(ledger.featureId).toBe("001-ira-command-plane");
+    expect(ledger.tasks).toHaveLength(1);
+    expect(ledger.tasks[0].hold).toBe(false);
   });
 });
 
