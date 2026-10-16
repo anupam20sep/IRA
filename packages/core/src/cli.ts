@@ -51,6 +51,7 @@ import {
 } from "./cli-output.js";
 import { isDirectRun } from "./cli-entry.js";
 import { runHookIngest } from "./engines/hook-ingest.js";
+import { runEnginesCli } from "./engines/cli-engines.js";
 import { writeStatusFile } from "./fr-status.js";
 import {
   commandPlaneHelpSummary,
@@ -86,6 +87,10 @@ async function readStdinText(): Promise<string> {
 
 async function runCliInner(argv: string[], options?: RunCliOptions): Promise<CliResult> {
   const [command, ...rest] = argv;
+
+  if (command === "engines" && rest.length > 0 && rest[0] !== "hook-ingest") {
+    return runEnginesCli(rest);
+  }
 
   if (command === "engines" && rest[0] === "hook-ingest") {
     const { values } = parseArgs({
