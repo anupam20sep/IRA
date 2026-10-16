@@ -53,3 +53,4 @@ export {
   type CoordinatorBriefPaths,
   type CoordinatorLogEntry,
 } from "./coordinator-ledger.js";
+export * from "./command-plane/index.js";
