@@ -4,6 +4,7 @@ import { renderFleetView } from "./views/fleet.js";
 import { renderAskMeView } from "./views/ask-me.js";
 import { renderActivityView, type ActivityViewState } from "./views/activity.js";
 import { renderBriefView } from "./views/brief.js";
+import { renderSpendView } from "./views/spend.js";
 import { renderTasksView } from "./views/tasks.js";
 import { renderTriggersView } from "./views/triggers.js";
 
@@ -307,6 +308,10 @@ export function bootstrapClient(deps: BootstrapDeps): CommandCenterClient {
     }
     if (view === "triggers") {
       renderTriggersView(host, snapshot);
+      return;
+    }
+    if (view === "spend") {
+      renderSpendView(host, snapshot);
       return;
     }
     VIEW_MOUNTS[view](host, snapshot);
