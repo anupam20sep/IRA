@@ -7,10 +7,11 @@ export const SCRIBE_BUSY = "SCRIBE_BUSY" as const;
 export const LEDGER_BUSY = "LEDGER_BUSY" as const;
 export const MAILBOX_BUSY = "MAILBOX_BUSY" as const;
 export const EVENT_BUSY = "EVENT_BUSY" as const;
+export const ROSTER_BUSY = "ROSTER_BUSY" as const;
 
 export type LockBusyCode = Extract<
   CommandPlaneErrorCode,
-  typeof SCRIBE_BUSY | typeof LEDGER_BUSY | typeof MAILBOX_BUSY | typeof EVENT_BUSY
+  typeof SCRIBE_BUSY | typeof LEDGER_BUSY | typeof MAILBOX_BUSY | typeof EVENT_BUSY | typeof ROSTER_BUSY
 >;
 
 /** Blackboard scribe does not wait. Other hive locks wait up to two seconds. */
@@ -48,6 +49,7 @@ export function busyCodeForLock(lockPath: string): LockBusyCode {
   const base = basename(lockPath);
   if (base === "blackboard.lock") return SCRIBE_BUSY;
   if (base === "events.lock") return EVENT_BUSY;
+  if (base === "roster.lock") return ROSTER_BUSY;
   if (/^ledger-.+\.lock$/.test(base)) return LEDGER_BUSY;
   if (/^mailbox-.+-outbox\.lock$/.test(base)) return MAILBOX_BUSY;
   throw new Error(`unknown hive lock path: ${base}`);
@@ -63,6 +65,8 @@ export function lockWaitMs(lockPath: string): number {
       return MAILBOX_LOCK_WAIT_MS;
     case EVENT_BUSY:
       return EVENT_LOCK_WAIT_MS;
+    case ROSTER_BUSY:
+      return LEDGER_LOCK_WAIT_MS;
   }
 }
 

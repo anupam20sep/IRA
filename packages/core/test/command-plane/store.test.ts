@@ -6,6 +6,7 @@ import {
   BLACKBOARD_LOCK_WAIT_MS,
   EVENT_BUSY,
   EVENT_LOCK_WAIT_MS,
+  ROSTER_BUSY,
   LEDGER_BUSY,
   LEDGER_LOCK_WAIT_MS,
   MAILBOX_BUSY,
@@ -80,6 +81,8 @@ describe("lock wait bounds and busy codes", () => {
     expect(lockWaitMs(join(dir, "mailbox-ira-outbox.lock"))).toBe(MAILBOX_LOCK_WAIT_MS);
     expect(lockWaitMs(join(dir, "events.lock"))).toBe(2000);
     expect(lockWaitMs(join(dir, "events.lock"))).toBe(EVENT_LOCK_WAIT_MS);
+    expect(lockWaitMs(join(dir, "roster.lock"))).toBe(2000);
+    expect(lockWaitMs(join(dir, "roster.lock"))).toBe(LEDGER_LOCK_WAIT_MS);
   });
 
   it("maps lock filenames to busy codes", () => {
@@ -88,6 +91,7 @@ describe("lock wait bounds and busy codes", () => {
     expect(busyCodeForLock(join(dir, "ledger-feat.lock"))).toBe(LEDGER_BUSY);
     expect(busyCodeForLock(join(dir, "mailbox-worker-outbox.lock"))).toBe(MAILBOX_BUSY);
     expect(busyCodeForLock(join(dir, "events.lock"))).toBe(EVENT_BUSY);
+    expect(busyCodeForLock(join(dir, "roster.lock"))).toBe(ROSTER_BUSY);
   });
 });
 
