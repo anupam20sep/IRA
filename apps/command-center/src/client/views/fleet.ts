@@ -1,3 +1,9 @@
+/**
+ * Fleet / workers panel IA adapted from Munder Difflin (MIT).
+ * @see https://github.com/chaitanyagiri/munder-difflin — WorkersTab.tsx
+ * @see https://munderdiffl.in/blog/command-center-guide/
+ * LimeZu pixel assets are not copied.
+ */
 import type { BoardSnapshot, SnapshotAgent, SnapshotTask } from "../../shared/snapshot-types.js";
 
 const ENGINE_DEGRADATION_COPY =

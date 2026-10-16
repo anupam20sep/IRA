@@ -1,3 +1,9 @@
+/**
+ * Ask-Me / approvals inbox IA adapted from Munder Difflin (MIT).
+ * @see https://github.com/chaitanyagiri/munder-difflin — AskMeTab.tsx; askMeOrder.ts
+ * @see https://munderdiffl.in/blog/command-center-guide/
+ * LimeZu pixel assets are not copied.
+ */
 import type { AskMeAction, BoardSnapshot, SnapshotAskMe } from "../../shared/snapshot-types.js";
 
 export type AskMeViewDeps = {

@@ -1,3 +1,9 @@
+/**
+ * Tasks kanban panel IA adapted from Munder Difflin (MIT).
+ * @see https://github.com/chaitanyagiri/munder-difflin — TasksKanban.tsx
+ * @see https://munderdiffl.in/blog/command-center-guide/
+ * LimeZu pixel assets are not copied.
+ */
 import { computeReadiness } from "../dag.js";
 import { canAbort, canDispatch, canPause, canReassign } from "../steer-guards.js";
 import type { BoardSnapshot, SnapshotAgent, SnapshotTask } from "../../shared/snapshot-types.js";
