@@ -4,6 +4,7 @@ import { renderFleetView } from "./views/fleet.js";
 import { renderAskMeView } from "./views/ask-me.js";
 import { renderActivityView, type ActivityViewState } from "./views/activity.js";
 import { renderBriefView } from "./views/brief.js";
+import { renderMemoryView } from "./views/memory.js";
 import { renderSpendView } from "./views/spend.js";
 import { renderTasksView } from "./views/tasks.js";
 import { renderTriggersView } from "./views/triggers.js";
@@ -103,7 +104,7 @@ const VIEW_MOUNTS: Record<ShellView, ViewMount> = {
   tasks: placeholderMount("Tasks"),
   fleet: placeholderMount("Fleet"),
   activity: placeholderMount("Activity"),
-  memory: placeholderMount("Memory"),
+  memory: (host, snap) => renderMemoryView(host, snap),
   spend: placeholderMount("Spend"),
   "ask-me": placeholderMount("Ask-Me"),
   triggers: (host, snap) => renderTriggersView(host, snap),
@@ -314,7 +315,10 @@ export function bootstrapClient(deps: BootstrapDeps): CommandCenterClient {
       renderSpendView(host, snapshot);
       return;
     }
-    VIEW_MOUNTS[view](host, snapshot);
+    if (view === "memory") {
+      renderMemoryView(host, snapshot);
+      return;
+    }
   };
 
   const render = () => {

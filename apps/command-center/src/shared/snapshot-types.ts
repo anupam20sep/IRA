@@ -187,6 +187,9 @@ export type AutonomySlice = {
   pollIntervalMs: number;
 };
 
+/** Pattern store probe from GET /api/snapshot (no file bytes or sqlite). */
+export type PatternsDirState = "empty" | "unavailable" | "files-no-query";
+
 export type BoardSnapshot = {
   ok: true;
   generatedAt: string;
@@ -200,4 +203,5 @@ export type BoardSnapshot = {
   agents: SnapshotAgent[];
   askMe: SnapshotAskMe[];
   events: SnapshotEvent[];
+  patternsDirState: PatternsDirState;
 };

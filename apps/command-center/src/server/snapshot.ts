@@ -25,6 +25,7 @@ import type {
   TaskDrift,
   TaskKind,
   WorktreePolicy,
+  PatternsDirState,
 } from "../shared/snapshot-types.js";
 
 /** Read-only CLI calls. Steer and brief-submit use a longer timeout elsewhere. */
@@ -58,7 +59,7 @@ const ASK_REASON = new Set<SnapshotAskMe["reasonClass"]>([
   "ambiguous_requirement",
 ]);
 
-export type PatternsDirState = "empty" | "unavailable" | "files-no-query";
+export type { PatternsDirState };
 
 export type SnapshotContext = {
   repositoryRoot: string;
@@ -161,6 +162,7 @@ export async function buildSnapshot(ctx: SnapshotContext): Promise<BoardSnapshot
     agents: roster,
     askMe,
     events,
+    patternsDirState: detectPatternsDirState(repositoryRoot),
   };
 }
 

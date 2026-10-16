@@ -114,6 +114,7 @@ describe("BoardSnapshot", () => {
       agents: [],
       askMe: [],
       events: [],
+      patternsDirState: "empty",
     };
 
     expect(snapshot.ok).toBe(true);
