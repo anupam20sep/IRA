@@ -40,7 +40,7 @@ import {
   readCoordinatorBriefText,
   writeCoordinatorBrief,
 } from "./coordinator-ledger.js";
-import { isDirectRun } from "./cli-entry.js";
+import { bootstrapEngineHooksFromCwd, isDirectRun } from "./cli-entry.js";
 import { buildCommandPlaneMcpTools } from "./command-plane/mcp-command-plane-tools.js";
 import { buildEnginesMcpTools } from "./engines/mcp-handlers.js";
 
@@ -484,6 +484,7 @@ export function createServer(): McpServer {
 }
 
 export async function runMcpServer(): Promise<void> {
+  bootstrapEngineHooksFromCwd();
   const server = createServer();
   const transport = new StdioServerTransport();
   await server.connect(transport);

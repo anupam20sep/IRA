@@ -34,7 +34,8 @@ export * from "./forge-loop.js";
 export { initProject, defaultTemplatesDir, type InitMode, type InitOptions, type InitResult } from "./init.js";
 export { formatInitReport, formatInitError } from "./init.js";
 export { emitInitSuccess, emitInitFailure } from "./cli-output.js";
-export { isDirectRun } from "./cli-entry.js";
+export { isDirectRun, bootstrapEngineHooksFromCwd } from "./cli-entry.js";
+export { registerEngineHooks, registerEngineHooksIfHive } from "./engines/register.js";
 export {
   discoverPersonas,
   findProjectRoot,
