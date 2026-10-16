@@ -1,5 +1,6 @@
 #!/usr/bin/env node
 import { readFile } from "node:fs/promises";
+import { stdin } from "node:process";
 import { parseArgs } from "node:util";
 import { parseSpec } from "./spec-parser.js";
 import { parsePlan } from "./plan-parser.js";
@@ -49,6 +50,7 @@ import {
   formatSyncStatusReport,
 } from "./cli-output.js";
 import { isDirectRun } from "./cli-entry.js";
+import { runHookIngest } from "./engines/hook-ingest.js";
 import { writeStatusFile } from "./fr-status.js";
 import {
   commandPlaneHelpSummary,
@@ -74,8 +76,37 @@ export async function runCli(argv: string[], options?: RunCliOptions): Promise<C
   }
 }
 
+async function readStdinText(): Promise<string> {
+  const chunks: Buffer[] = [];
+  for await (const chunk of stdin) {
+    chunks.push(typeof chunk === "string" ? Buffer.from(chunk) : chunk);
+  }
+  return Buffer.concat(chunks).toString("utf8");
+}
+
 async function runCliInner(argv: string[], options?: RunCliOptions): Promise<CliResult> {
   const [command, ...rest] = argv;
+
+  if (command === "engines" && rest[0] === "hook-ingest") {
+    const { values } = parseArgs({
+      args: rest.slice(1),
+      options: { session: { type: "string" } },
+    });
+    const sessionId =
+      (values.session as string | undefined)?.trim() ||
+      process.env.SUPERSPEC_ENGINE_SESSION?.trim() ||
+      "";
+    if (!sessionId) {
+      return { code: 1, stdout: "Error: --session or SUPERSPEC_ENGINE_SESSION is required." };
+    }
+    try {
+      const stdinJson = await readStdinText();
+      await runHookIngest(stdinJson, sessionId);
+      return { code: 0, stdout: "" };
+    } catch (err) {
+      return { code: 1, stdout: `Error: ${err instanceof Error ? err.message : String(err)}` };
+    }
+  }
 
   if (isCommandPlaneCommand(command)) {
     const cp = await runCommandPlaneCli(argv);
