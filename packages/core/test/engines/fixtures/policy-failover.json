@@ -1,0 +1,9 @@
+{
+  "schemaVersion": 1,
+  "failoverEnabled": true,
+  "ladder": ["subscription", "byok", "local"],
+  "crossEngineReview": false,
+  "delegateToHost": null,
+  "hitl": ["budget_exceed", "destructive_git"],
+  "quotaGroups": []
+}
