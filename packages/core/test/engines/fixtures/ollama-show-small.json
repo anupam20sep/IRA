@@ -1,0 +1,14 @@
+{
+  "modelfile": "FROM qwen2.5-coder\nPARAMETER num_ctx 8192\n",
+  "parameters": "stop                           \"<|im_end|>\"\nnum_ctx                        8192\n",
+  "template": "{{ .Prompt }}",
+  "details": {
+    "family": "qwen2",
+    "parameter_size": "7B",
+    "quantization_level": "Q4_K_M"
+  },
+  "model_info": {
+    "general.architecture": "qwen2",
+    "qwen2.context_length": 131072
+  }
+}
