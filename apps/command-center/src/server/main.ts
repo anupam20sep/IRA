@@ -14,6 +14,7 @@ export const LOOPBACK_HOST = "127.0.0.1";
 export const DEFAULT_PORT = 4731;
 
 const MAX_BODY_BYTES = 1_048_576;
+const READ_TIMEOUT_MS = 10_000;
 const OUTCOME_MAX = 4000;
 const DELIVERABLE_MAX = 1000;
 const CONSTRAINT_MAX = 500;
@@ -179,6 +180,10 @@ async function handleRequest(req: IncomingMessage, res: ServerResponse, ctx: App
   }
   if (url.pathname === "/api/snapshot") {
     await handleSnapshot(res, url, ctx);
+    return;
+  }
+  if (url.pathname === "/api/ask-me/show") {
+    await handleAskMeShow(res, url, ctx);
     return;
   }
   if (url.pathname === "/api/events") {
@@ -387,6 +392,21 @@ async function submitBrief(payload: unknown, ctx: AppContext): Promise<JsonResul
   if (budgetTokens.value !== null) argv.push("--budget-tokens", String(budgetTokens.value));
 
   return fromCli(await runSuperspec(argv, { cwd: ctx.repositoryRoot, timeoutMs: STEER_TIMEOUT_MS }));
+}
+
+async function handleAskMeShow(res: ServerResponse, url: URL, ctx: AppContext): Promise<void> {
+  const id = url.searchParams.get("id")?.trim() ?? "";
+  if (!id) {
+    sendJson(res, 400, { ok: false, error: "INVALID_INPUT", message: "Ask-Me id is required." });
+    return;
+  }
+  const result = fromCli(
+    await runSuperspec(
+      ["ask-me", "show", "--id", id, "--cwd", ctx.repositoryRoot],
+      { cwd: ctx.repositoryRoot, timeoutMs: READ_TIMEOUT_MS },
+    ),
+  );
+  sendJson(res, result.status, result.body);
 }
 
 async function answerAskMe(payload: unknown, ctx: AppContext): Promise<JsonResult> {

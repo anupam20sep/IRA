@@ -59,27 +59,50 @@ function snapshot(
   };
 }
 
+function showItem(overrides: Partial<SnapshotAskMe> & Pick<SnapshotAskMe, "id">): SnapshotAskMe {
+  return askItem({
+    featureId: FEATURE,
+    taskId: "T002",
+    agentId: "worker-a",
+    reasonClass: "repeated_review_failure",
+    question: "Full detail: allow another review attempt?",
+    createdAt: "2026-10-15T12:00:00.000Z",
+    ageSeconds: 86400,
+    ...overrides,
+  });
+}
+
 describe("renderAskMeView", () => {
   let host: HTMLElement;
   let postMutation: ReturnType<typeof vi.fn>;
+  let fetchShow: ReturnType<typeof vi.fn>;
 
   beforeEach(() => {
     document.body.innerHTML = "";
     host = document.createElement("div");
     document.body.appendChild(host);
     postMutation = vi.fn(async () => new Response(JSON.stringify({ ok: true }), { status: 200 }));
+    fetchShow = vi.fn(async (id: string) => showItem({ id }));
   });
 
-  it("lists only open ask-me items and renders the selected question", () => {
-    const open = askItem({ id: "ask_open", question: "Should we retry the review?" });
+  it("lists only open ask-me items and renders ask-me-show detail when selected", async () => {
+    const open = askItem({ id: "ask_open", question: "List preview label" });
     const resolved = askItem({
       id: "ask_done",
       question: "Old question",
       state: "resolved",
       resolvedAt: "2026-10-16T01:00:00.000Z",
     });
+    fetchShow.mockResolvedValue(
+      showItem({
+        id: "ask_open",
+        question: "Should we retry the review?",
+        taskId: "T018",
+        reasonClass: "ambiguous_requirement",
+      }),
+    );
 
-    renderAskMeView(host, snapshot([open, resolved]), { postMutation });
+    renderAskMeView(host, snapshot([open, resolved]), { postMutation, fetchShow });
 
     expect(host.querySelector('[data-ask-me-id="ask_open"]')).not.toBeNull();
     expect(host.querySelector('[data-ask-me-id="ask_done"]')).toBeNull();
@@ -87,7 +110,15 @@ describe("renderAskMeView", () => {
     const row = host.querySelector('[data-ask-me-id="ask_open"]') as HTMLButtonElement;
     row.click();
 
+    await vi.waitFor(() => expect(fetchShow).toHaveBeenCalledWith("ask_open"));
+
     expect(host.querySelector("[data-ask-me-question]")?.textContent).toBe("Should we retry the review?");
+    expect(host.querySelector("[data-ask-me-reason-class]")?.textContent).toBe("ambiguous_requirement");
+    expect(host.querySelector("[data-ask-me-feature-id]")?.textContent).toBe(FEATURE);
+    expect(host.querySelector("[data-ask-me-task-id]")?.textContent).toBe("T018");
+    expect(host.querySelector("[data-ask-me-agent-id]")?.textContent).toBe("worker-a");
+    expect(host.querySelector("[data-ask-me-state]")?.textContent).toBe("open");
+    expect(host.querySelector("[data-ask-me-created-at]")?.textContent).toBe("2026-10-15T12:00:00.000Z");
   });
 
   it("does not synthesize inbox rows from routine hive events", () => {
@@ -112,7 +143,7 @@ describe("renderAskMeView", () => {
       },
     ];
 
-    renderAskMeView(host, snapshot([], events), { postMutation });
+    renderAskMeView(host, snapshot([], events), { postMutation, fetchShow });
 
     expect(host.querySelector("[data-ask-me-inbox]")?.querySelectorAll("[data-ask-me-id]").length).toBe(0);
   });
@@ -121,10 +152,11 @@ describe("renderAskMeView", () => {
     const open = askItem({ id: "ask_1", question: "Approve scope change?" });
     const confirm = vi.fn(() => false);
 
-    renderAskMeView(host, snapshot([open]), { postMutation, confirm });
+    renderAskMeView(host, snapshot([open]), { postMutation, fetchShow, confirm });
 
     const row = host.querySelector('[data-ask-me-id="ask_1"]') as HTMLButtonElement;
     row.click();
+    await vi.waitFor(() => expect(host.querySelector("[data-ask-me-answer-text]")).not.toBeNull());
 
     const text = host.querySelector('[data-ask-me-answer-text]') as HTMLTextAreaElement;
     text.value = "Proceed with narrowed scope";
@@ -152,14 +184,15 @@ describe("renderAskMeView", () => {
     });
   });
 
-  it("refuses submit client-side when answer text is empty", () => {
+  it("refuses submit client-side when answer text is empty", async () => {
     const open = askItem({ id: "ask_2", question: "Need input?" });
     const confirm = vi.fn(() => true);
 
-    renderAskMeView(host, snapshot([open]), { postMutation, confirm });
+    renderAskMeView(host, snapshot([open]), { postMutation, fetchShow, confirm });
 
     const row = host.querySelector('[data-ask-me-id="ask_2"]') as HTMLButtonElement;
     row.click();
+    await vi.waitFor(() => expect(host.querySelector('[data-action="ask-me-submit"]')).not.toBeNull());
 
     const submit = host.querySelector('[data-action="ask-me-submit"]') as HTMLButtonElement;
     submit.click();

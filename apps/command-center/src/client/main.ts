@@ -1,4 +1,4 @@
-import type { BoardSnapshot } from "../shared/snapshot-types.js";
+import type { BoardSnapshot, SnapshotAskMe } from "../shared/snapshot-types.js";
 import { renderShell, type ShellView } from "./shell.js";
 import { renderFleetView } from "./views/fleet.js";
 import { renderAskMeView } from "./views/ask-me.js";
@@ -304,7 +304,23 @@ export function bootstrapClient(deps: BootstrapDeps): CommandCenterClient {
       return;
     }
     if (view === "ask-me") {
-      renderAskMeView(host, snapshot, { postMutation: postMutationRef });
+      renderAskMeView(host, snapshot, {
+        postMutation: postMutationRef,
+        fetchShow: async (id) => {
+          const response = await clientFetch(
+            `${apiOrigin}/api/ask-me/show?id=${encodeURIComponent(id)}`,
+          );
+          if (!response.ok) {
+            return null;
+          }
+          const body = (await response.json()) as { ok?: boolean; item?: SnapshotAskMe };
+          if (body.ok !== true || !body.item) {
+            return null;
+          }
+          const listRow = snapshot.askMe.find((row) => row.id === id);
+          return { ...body.item, ageSeconds: listRow?.ageSeconds ?? body.item.ageSeconds ?? 0 };
+        },
+      });
       return;
     }
     if (view === "triggers") {

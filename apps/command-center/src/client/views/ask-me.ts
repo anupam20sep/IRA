@@ -2,6 +2,7 @@ import type { AskMeAction, BoardSnapshot, SnapshotAskMe } from "../../shared/sna
 
 export type AskMeViewDeps = {
   postMutation: (path: string, init?: Omit<RequestInit, "method">) => Promise<Response>;
+  fetchShow: (id: string) => Promise<SnapshotAskMe | null>;
   confirm?: (message?: string) => boolean;
   initialSelectedId?: string | null;
 };
@@ -22,6 +23,80 @@ function jsonPost(
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(body),
   });
+}
+
+function appendDetailField(
+  parent: HTMLElement,
+  attr: string,
+  value: string | null,
+): void {
+  const row = document.createElement("p");
+  row.className = "ira-ask-me-detail-field";
+  row.setAttribute(attr, "");
+  row.textContent = value ?? "—";
+  parent.append(row);
+}
+
+function renderShowDetail(detail: HTMLElement, item: SnapshotAskMe): void {
+  appendDetailField(detail, "data-ask-me-reason-class", item.reasonClass);
+  appendDetailField(detail, "data-ask-me-feature-id", item.featureId);
+  appendDetailField(detail, "data-ask-me-task-id", item.taskId);
+  appendDetailField(detail, "data-ask-me-agent-id", item.agentId);
+  appendDetailField(detail, "data-ask-me-state", item.state);
+  appendDetailField(detail, "data-ask-me-created-at", item.createdAt);
+
+  const question = document.createElement("p");
+  question.className = "ira-ask-me-question";
+  question.setAttribute("data-ask-me-question", "");
+  question.textContent = item.question;
+  detail.append(question);
+}
+
+function renderAnswerForm(
+  detail: HTMLElement,
+  item: SnapshotAskMe,
+  deps: AskMeViewDeps,
+  confirmFn: (message?: string) => boolean,
+): void {
+  const form = document.createElement("div");
+  form.className = "ira-ask-me-answer-form";
+
+  const text = document.createElement("textarea");
+  text.setAttribute("data-ask-me-answer-text", "");
+  text.rows = 3;
+  text.placeholder = "Your answer (required)";
+
+  const action = document.createElement("select");
+  action.setAttribute("data-ask-me-action", "");
+  for (const name of ACTIONS) {
+    const option = document.createElement("option");
+    option.value = name;
+    option.textContent = name.replace("_", " ");
+    action.append(option);
+  }
+
+  const submit = document.createElement("button");
+  submit.type = "button";
+  submit.textContent = "Submit answer";
+  submit.setAttribute("data-action", "ask-me-submit");
+  submit.addEventListener("click", () => {
+    const answerText = text.value.trim();
+    if (answerText.length === 0) {
+      return;
+    }
+    if (!confirmFn(CONFIRM_MESSAGE)) {
+      return;
+    }
+    jsonPost(deps.postMutation, {
+      id: item.id,
+      text: answerText,
+      action: action.value as AskMeAction,
+      confirm: true,
+    });
+  });
+
+  form.append(text, action, submit);
+  detail.append(form);
 }
 
 export function renderAskMeView(
@@ -49,62 +124,39 @@ export function renderAskMeView(
   detail.setAttribute("data-ask-me-detail", "");
 
   const confirmFn = deps.confirm ?? ((message?: string) => globalThis.confirm(message));
+  let detailGeneration = 0;
 
   const paintDetail = () => {
     detail.replaceChildren();
-    const selected = items.find((row) => row.id === selectedId);
-    if (!selected) {
+    const listRow = items.find((row) => row.id === selectedId);
+    if (!listRow) {
       const empty = document.createElement("p");
       empty.textContent = items.length === 0 ? "No open Ask-Me items." : "Select an item.";
       detail.append(empty);
       return;
     }
 
-    const question = document.createElement("p");
-    question.className = "ira-ask-me-question";
-    question.setAttribute("data-ask-me-question", "");
-    question.textContent = selected.question;
-    detail.append(question);
+    const loading = document.createElement("p");
+    loading.className = "ira-ask-me-detail-loading";
+    loading.setAttribute("data-ask-me-detail-loading", "");
+    loading.textContent = "Loading detail…";
+    detail.append(loading);
 
-    const form = document.createElement("div");
-    form.className = "ira-ask-me-answer-form";
-
-    const text = document.createElement("textarea");
-    text.setAttribute("data-ask-me-answer-text", "");
-    text.rows = 3;
-    text.placeholder = "Your answer (required)";
-
-    const action = document.createElement("select");
-    action.setAttribute("data-ask-me-action", "");
-    for (const name of ACTIONS) {
-      const option = document.createElement("option");
-      option.value = name;
-      option.textContent = name.replace("_", " ");
-      action.append(option);
-    }
-
-    const submit = document.createElement("button");
-    submit.type = "button";
-    submit.textContent = "Submit answer";
-    submit.setAttribute("data-action", "ask-me-submit");
-    submit.addEventListener("click", () => {
-      const answerText = text.value.trim();
-      if (answerText.length === 0) {
+    const generation = ++detailGeneration;
+    void deps.fetchShow(listRow.id).then((showItem) => {
+      if (generation !== detailGeneration) {
         return;
       }
-      if (!confirmFn(CONFIRM_MESSAGE)) {
+      detail.replaceChildren();
+      if (!showItem) {
+        const failed = document.createElement("p");
+        failed.textContent = "Could not load Ask-Me detail.";
+        detail.append(failed);
         return;
       }
-      jsonPost(deps.postMutation, {
-        id: selected.id,
-        text: answerText,
-        action: action.value as AskMeAction,
-        confirm: true,
-      });
+      renderShowDetail(detail, showItem);
+      renderAnswerForm(detail, showItem, deps, confirmFn);
     });
-
-    form.append(text, action, submit);
-    detail.append(form);
   };
 
   for (const item of items) {
