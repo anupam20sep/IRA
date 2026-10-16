@@ -210,6 +210,12 @@ function tryJson(text: string): unknown | undefined {
   }
 }
 
+/** Spawn or timeout only. A non-zero `ollama show` is a finished probe with no context. */
+function ollamaWasNotMeasured(err: NodeJS.ErrnoException & { killed?: boolean }): boolean {
+  if (err.code === "ENOENT" || err.code === "ETIMEDOUT") return true;
+  return err.killed === true;
+}
+
 function runOllama(execFile: ExecFileFn, model: string): Promise<{ ran: true; value: unknown } | { ran: false }> {
   return new Promise((resolve) => {
     try {
@@ -219,16 +225,16 @@ function runOllama(execFile: ExecFileFn, model: string): Promise<{ ran: true; va
         { timeout: PROBE_TIMEOUT_MS, shell: false },
         (err, stdout) => {
           const text = stdout == null ? "" : String(stdout);
-          if (err && !text.trim()) {
+          const parsed = text.trim() ? tryJson(text) : undefined;
+          if (parsed !== undefined) {
+            resolve({ ran: true, value: parsed });
+            return;
+          }
+          if (err && ollamaWasNotMeasured(err)) {
             resolve({ ran: false });
             return;
           }
-          if (err) {
-            const parsed = tryJson(text);
-            resolve(parsed === undefined ? { ran: false } : { ran: true, value: parsed });
-            return;
-          }
-          resolve({ ran: true, value: tryJson(text) ?? null });
+          resolve({ ran: true, value: null });
         },
       );
     } catch {

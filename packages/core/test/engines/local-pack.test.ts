@@ -250,6 +250,28 @@ describe("setLocalPack", () => {
     await expect(access(join(root, "engines", "local-pack.json"))).rejects.toThrow();
   });
 
+  it("does not persist a declared context when ollama show exits with no JSON", async () => {
+    const root = await hive();
+    const execFile = vi.fn(
+      (_cmd: string, _args: string[], _opts: unknown, cb: (err: Error, stdout: string, stderr: string) => void) => {
+        cb(Object.assign(new Error("ollama show failed"), { code: 1 }), "", "Error: model 'qwen' not found");
+      },
+    );
+    const r = await setLocalPack(
+      root,
+      {
+        engineId: "opencode",
+        backend: "ollama",
+        model: "qwen",
+        advertisedContext: 131072,
+      },
+      { execFile: execFile as never },
+    );
+    expect(r.ok).toBe(false);
+    if (!r.ok) expect(r.code).toBe("LOCAL_CONTEXT_UNKNOWN");
+    await expect(access(join(root, "engines", "local-pack.json"))).rejects.toThrow();
+  });
+
   it("does not write the profile when the context gate fails", async () => {
     const root = await hive();
     const execFile = execOk(JSON.stringify(smallOllama));
