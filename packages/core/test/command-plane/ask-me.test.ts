@@ -4,6 +4,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { hiveInit } from "../../src/command-plane/hive-init.js";
 import { HiveLedgerSchema, AskMeItemSchema } from "../../src/command-plane/schema.js";
+import { withLock } from "../../src/command-plane/store.js";
 import type { AskMeReasonClass, HiveTask } from "../../src/command-plane/types.js";
 import { saveState, type ForgeState } from "../../src/forge-loop.js";
 import {
@@ -262,6 +263,40 @@ describe("openAskMeItem", () => {
       reviewFailures: 3,
       blockedByAskMeId: opened.item.id,
     });
+  });
+
+  it("returns LEDGER_BUSY and does not create an item while the ledger lock is held", async () => {
+    const { hive } = await tempHive();
+    await writeLedger(hive, "specs/001-demo", ledgerTask());
+    const held = await withLock(join(hive, "locks", "ledger-001-demo.lock"), { waitMs: 3000 }, () =>
+      openAskMeItem({
+        hiveRoot: hive,
+        featureId: "001-demo",
+        taskId: "T002",
+        agentId: null,
+        reasonClass: "budget_exceed",
+        question: "Budget would be exceeded",
+      }),
+    );
+    expect(held.ok).toBe(true);
+    if (!held.ok) return;
+    expect(held.value).toMatchObject({ ok: false, error: "LEDGER_BUSY" });
+    expect(await askFiles(hive)).toEqual([]);
+  }, 10000);
+
+  it("returns HIVE_CORRUPT and does not create an item when the ledger is unreadable", async () => {
+    const { hive } = await tempHive();
+    await writeFile(join(hive, "ledger", "001-demo.json"), "{not-json\n");
+    const opened = await openAskMeItem({
+      hiveRoot: hive,
+      featureId: "001-demo",
+      taskId: "T002",
+      agentId: null,
+      reasonClass: "budget_exceed",
+      question: "Budget would be exceeded",
+    });
+    expect(opened).toMatchObject({ ok: false, error: "HIVE_CORRUPT" });
+    expect(await askFiles(hive)).toEqual([]);
   });
 });
 
@@ -568,5 +603,105 @@ describe("answerAskMe", () => {
     );
     const saved = JSON.parse(await readFile(join(specDir, ".superspec", "state.json"), "utf8")) as ForgeState;
     expect(saved.tasks.T002).toEqual({ status: "blocked", reviewFailures: 3 });
+  });
+
+  it("sets forge pending from a repo-relative specDir when cwd is outside the repo", async () => {
+    const { root, hive, specDir } = await tempHive();
+    await writeLedger(hive, "specs/001-demo", ledgerTask());
+    await saveState(specDir, { tasks: { T002: { status: "blocked", reviewFailures: 3 } } });
+    const away = await mkdtemp(join(tmpdir(), "cp-ask-me-cwd-"));
+    roots.push(away);
+    const previous = process.cwd();
+    process.chdir(away);
+    try {
+      const opened = await openAskMeItem({
+        hiveRoot: hive,
+        featureId: "001-demo",
+        taskId: "T002",
+        agentId: "agent-host",
+        reasonClass: "repeated_review_failure",
+        question: "Review failed at the ceiling",
+        now: "2026-10-16T01:00:00.000Z",
+      });
+      expect(opened.ok).toBe(true);
+      if (!opened.ok) return;
+      const answered = await answerAskMe({
+        hiveRoot: hive,
+        id: opened.item.id,
+        text: "Retry once at the same ceiling",
+        action: "retry",
+        now: "2026-10-16T02:00:00.000Z",
+      });
+      expect(answered.ok).toBe(true);
+      if (!answered.ok) return;
+      expect(answered.task).toEqual({ id: "T002", status: "todo", reviewFailures: 3 });
+      const saved = JSON.parse(await readFile(join(root, "specs", "001-demo", ".superspec", "state.json"), "utf8")) as ForgeState;
+      expect(saved.tasks.T002).toEqual({ status: "pending", reviewFailures: 3 });
+      await expect(readFile(join(away, "specs", "001-demo", ".superspec", "state.json"), "utf8")).rejects.toMatchObject({
+        code: "ENOENT",
+      });
+      expect((await readLedger(hive)).tasks[0]).toMatchObject({
+        status: "todo",
+        reviewFailures: 3,
+        blockedByAskMeId: null,
+      });
+    } finally {
+      process.chdir(previous);
+    }
+  });
+
+  it("does not release the hive task or resolve the item when forge state is missing", async () => {
+    const { hive } = await tempHive();
+    await writeLedger(hive, "specs/001-demo", ledgerTask());
+    const opened = await openAskMeItem({
+      hiveRoot: hive,
+      featureId: "001-demo",
+      taskId: "T002",
+      agentId: null,
+      reasonClass: "repeated_review_failure",
+      question: "Review failed at the ceiling",
+    });
+    expect(opened.ok).toBe(true);
+    if (!opened.ok) return;
+    const answered = await answerAskMe({
+      hiveRoot: hive,
+      id: opened.item.id,
+      text: "Retry",
+      action: "retry",
+      now: "2026-10-16T02:00:00.000Z",
+    });
+    expect(answered).toMatchObject({ ok: false, error: "HIVE_CORRUPT" });
+    expect((await readLedger(hive)).tasks[0]).toMatchObject({ status: "blocked", reviewFailures: 3 });
+    const raw = JSON.parse(await readFile(join(hive, "ask-me", `${opened.item.id}.json`), "utf8")) as { state: string };
+    expect(raw.state).toBe("open");
+  });
+
+  it("does not release the hive task when the forge row is not blocked", async () => {
+    const { hive, specDir } = await tempHive();
+    await writeLedger(hive, specDir, ledgerTask());
+    await saveState(specDir, { tasks: { T002: { status: "pending", reviewFailures: 3 } } });
+    const opened = await openAskMeItem({
+      hiveRoot: hive,
+      featureId: "001-demo",
+      taskId: "T002",
+      agentId: null,
+      reasonClass: "budget_exceed",
+      question: "Stop before dispatch",
+    });
+    expect(opened.ok).toBe(true);
+    if (!opened.ok) return;
+    const forgeBefore = await readFile(join(specDir, ".superspec", "state.json"), "utf8");
+    const answered = await answerAskMe({
+      hiveRoot: hive,
+      id: opened.item.id,
+      text: "Retry",
+      action: "retry",
+      now: "2026-10-16T02:00:00.000Z",
+    });
+    expect(answered).toMatchObject({ ok: false, error: "HIVE_CORRUPT" });
+    expect((await readLedger(hive)).tasks[0].status).toBe("blocked");
+    expect(await readFile(join(specDir, ".superspec", "state.json"), "utf8")).toBe(forgeBefore);
+    const raw = JSON.parse(await readFile(join(hive, "ask-me", `${opened.item.id}.json`), "utf8")) as { state: string };
+    expect(raw.state).toBe("open");
   });
 });

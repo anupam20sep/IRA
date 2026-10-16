@@ -1,7 +1,7 @@
 import { randomUUID } from "node:crypto";
 import { access, mkdir, readFile, readdir, writeFile } from "node:fs/promises";
 import { constants } from "node:fs";
-import { join } from "node:path";
+import { isAbsolute, join, relative, resolve } from "node:path";
 import { z } from "zod";
 import { loadState, saveState } from "../forge-loop.js";
 import {
@@ -87,18 +87,22 @@ export async function openAskMeItem(input: OpenAskMeInput): Promise<OpenAskMeRes
   if (!stamped.ok) return stamped;
   const built = buildOpenItem(input, stamped.value);
   if (!built.ok) return built;
+  const linkable = await ensureLedgerLinkable(input.hiveRoot, input.featureId, input.taskId);
+  if (!linkable.ok) return linkable;
 
   const dir = join(input.hiveRoot, "ask-me");
   await mkdir(dir, { recursive: true, mode: 0o700 });
   const existing = await findOpenDuplicate(dir, built.item);
   if (existing) {
-    await linkOpenItem(input.hiveRoot, existing, stamped.value);
+    const linked = await linkOpenItem(input.hiveRoot, existing, stamped.value);
+    if (!linked.ok) return linked;
     return { ok: true, created: false, item: existing };
   }
 
   const written = await createExclusive(dir, built.item);
   if (!written.ok) return written;
-  await linkOpenItem(input.hiveRoot, written.item, stamped.value);
+  const linked = await linkOpenItem(input.hiveRoot, written.item, stamped.value);
+  if (!linked.ok) return linked;
   if (written.created) {
     await appendEvent(input.hiveRoot, written.item.featureId, "ask_me.opened", {
       askMeId: written.item.id,
@@ -250,20 +254,48 @@ async function findOpenDuplicate(dir: string, candidate: AskMeItem): Promise<Ask
   return matches[0] ?? null;
 }
 
-async function linkOpenItem(hiveRoot: string, item: AskMeItem, now: string): Promise<void> {
-  if (!item.featureId || !item.taskId) return;
-  const ledgerPath = ledgerFile(hiveRoot, item.featureId);
-  await withLock(ledgerLock(hiveRoot, item.featureId), { waitMs: LEDGER_LOCK_WAIT_MS }, async () => {
-    const loaded = await readLedger(ledgerPath);
-    if (loaded === "missing" || loaded === "corrupt") return;
-    const index = loaded.ledger.tasks.findIndex((task) => task.id === item.taskId);
-    if (index < 0) return;
-    if (loaded.ledger.tasks[index].blockedByAskMeId) return;
+/** Missing ledger is a no-op. A busy lock or unreadable ledger fails the open. */
+async function ensureLedgerLinkable(
+  hiveRoot: string,
+  featureId: string | null,
+  taskId: string | null,
+): Promise<{ ok: true } | AskMeFailure> {
+  if (!featureId || !taskId) return { ok: true };
+  return withLedger(hiveRoot, featureId, async (loaded) => {
+    if (loaded === "missing") return { ok: true as const };
+    if (loaded === "corrupt") return fail("HIVE_CORRUPT", "Ledger is unreadable.");
+    return { ok: true as const };
+  });
+}
+
+async function linkOpenItem(hiveRoot: string, item: AskMeItem, now: string): Promise<{ ok: true } | AskMeFailure> {
+  const featureId = item.featureId;
+  const taskId = item.taskId;
+  if (!featureId || !taskId) return { ok: true };
+  return withLedger(hiveRoot, featureId, async (loaded) => {
+    if (loaded === "missing") return { ok: true as const };
+    if (loaded === "corrupt") return fail("HIVE_CORRUPT", "Ledger is unreadable.");
+    const index = loaded.ledger.tasks.findIndex((task) => task.id === taskId);
+    if (index < 0) return { ok: true as const };
+    if (loaded.ledger.tasks[index].blockedByAskMeId) return { ok: true as const };
     const tasks = loaded.ledger.tasks.map((task, taskIndex) =>
       taskIndex === index ? { ...task, blockedByAskMeId: item.id, updatedAt: now } : task,
     );
-    await writeJsonAtomic(ledgerPath, HiveLedgerSchema.parse({ ...loaded.ledger, updatedAt: now, tasks }));
+    await writeJsonAtomic(ledgerFile(hiveRoot, featureId), HiveLedgerSchema.parse({ ...loaded.ledger, updatedAt: now, tasks }));
+    return { ok: true as const };
   });
+}
+
+async function withLedger<T extends { ok: true } | AskMeFailure>(
+  hiveRoot: string,
+  featureId: string,
+  fn: (loaded: Awaited<ReturnType<typeof readLedger>>) => Promise<T>,
+): Promise<T | AskMeFailure> {
+  const locked = await withLock(ledgerLock(hiveRoot, featureId), { waitMs: LEDGER_LOCK_WAIT_MS }, async () =>
+    fn(await readLedger(ledgerFile(hiveRoot, featureId))),
+  );
+  if (!locked.ok) return fail("LEDGER_BUSY", "Ledger is busy.");
+  return locked.value;
 }
 
 async function taskEffect(
@@ -299,6 +331,10 @@ async function releaseIfBlockedOnlyByItem(
     const release = blockedOnlyByThisItem(task, item.id);
     const clearLink = task.blockedByAskMeId === item.id && !hasAbortReason(task);
     if (!release && !clearLink) return { ok: true as const, task: snapshot(task) };
+    if (release) {
+      const forged = await setForgePendingWithoutReviewIncrement(hiveRoot, loaded.ledger.specDir, taskId);
+      if (!forged.ok) return forged;
+    }
 
     const tasks = loaded.ledger.tasks.map((row) =>
       row.id === taskId
@@ -311,7 +347,6 @@ async function releaseIfBlockedOnlyByItem(
         : row,
     );
     const next = HiveLedgerSchema.parse({ ...loaded.ledger, updatedAt: now, tasks });
-    if (release) await setForgePendingWithoutReviewIncrement(loaded.ledger.specDir, taskId);
     await writeJsonAtomic(ledgerFile(hiveRoot, featureId), next);
     const released = next.tasks.find((row) => row.id === taskId);
     return { ok: true as const, task: snapshot(released ?? task) };
@@ -331,12 +366,50 @@ function hasAbortReason(task: HiveTask): boolean {
   return typeof task.abortReason === "string" && task.abortReason.length > 0;
 }
 
-async function setForgePendingWithoutReviewIncrement(specDir: string, taskId: string): Promise<void> {
-  const state = await loadState(specDir);
-  const row = state?.tasks[taskId];
-  if (!state || !row || row.status !== "blocked") return;
+/**
+ * Resolves a repo-relative ledger `specDir` under `hive.json` `repositoryRoot`
+ * before touching forge. A release that cannot move a blocked forge row fails
+ * before the hive ledger is written.
+ */
+async function setForgePendingWithoutReviewIncrement(
+  hiveRoot: string,
+  specDir: string,
+  taskId: string,
+): Promise<{ ok: true } | AskMeFailure> {
+  const root = await readRepositoryRoot(hiveRoot);
+  if (!root.ok) return root;
+  const specDirAbs = resolveInside(root.repositoryRoot, specDir);
+  if (!specDirAbs) return fail("HIVE_CORRUPT", "Spec directory is outside the repository.");
+  const state = await loadState(specDirAbs);
+  if (!state) return fail("HIVE_CORRUPT", "Forge state is missing.");
+  const row = state.tasks[taskId];
+  if (!row || row.status !== "blocked") return fail("HIVE_CORRUPT", "Forge task is not blocked.");
   state.tasks[taskId] = { ...row, status: "pending" };
-  await saveState(specDir, state);
+  await saveState(specDirAbs, state);
+  return { ok: true };
+}
+
+async function readRepositoryRoot(hiveRoot: string): Promise<{ ok: true; repositoryRoot: string } | AskMeFailure> {
+  try {
+    const value: unknown = JSON.parse(await readFile(join(hiveRoot, "hive.json"), "utf8"));
+    const repositoryRoot =
+      value && typeof value === "object" ? (value as { repositoryRoot?: unknown }).repositoryRoot : undefined;
+    if (typeof repositoryRoot !== "string" || repositoryRoot.trim().length === 0) {
+      return fail("HIVE_CORRUPT", "Hive manifest is unreadable.");
+    }
+    return { ok: true, repositoryRoot };
+  } catch {
+    return fail("HIVE_CORRUPT", "Hive manifest is unreadable.");
+  }
+}
+
+function resolveInside(root: string, candidate: string): string | null {
+  if (typeof candidate !== "string" || candidate.length === 0) return null;
+  const absRoot = resolve(root);
+  const abs = isAbsolute(candidate) ? resolve(candidate) : resolve(absRoot, candidate);
+  const rel = relative(absRoot, abs);
+  if (rel.startsWith("..") || isAbsolute(rel)) return null;
+  return abs;
 }
 
 async function readTaskSnapshot(
