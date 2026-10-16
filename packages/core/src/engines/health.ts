@@ -106,13 +106,37 @@ function byokEnvPresentForPreset(preset: EnginePreset, env: NodeJS.ProcessEnv): 
   return false;
 }
 
-function classifyStatusProbe(err: Error | null, stderr: string): AuthHealthSignals["statusProbe"] {
+const STATUS_AUTH_HINTS = [
+  "not logged in",
+  "login required",
+  "please log in",
+  "unauthorized",
+  "unauthenticated",
+  "not authenticated",
+  "authentication failed",
+  "invalid api key",
+  "invalid credentials",
+  "auth error",
+] as const;
+
+export function classifyStatusProbe(
+  err: Error | null,
+  stderr: string,
+  stdout = "",
+): AuthHealthSignals["statusProbe"] {
   if (!err) return "ok";
-  const text = stderr.toLowerCase();
+  const text = `${stderr}${stdout}`.toLowerCase();
   if (text.includes("unknown command") || text.includes("unknown subcommand")) {
     return "unknown_subcommand";
   }
-  return "auth_failure";
+  const code = (err as NodeJS.ErrnoException).code;
+  if (code === "ETIMEDOUT" || code === "ESRCH" || code === "ENOENT") {
+    return "none";
+  }
+  if (STATUS_AUTH_HINTS.some((hint) => text.includes(hint))) {
+    return "auth_failure";
+  }
+  return "none";
 }
 
 function probeStatus(
@@ -126,8 +150,8 @@ function probeStatus(
       binary,
       [...statusArgs],
       { timeout: STATUS_TIMEOUT_MS, shell: false },
-      (err, _stdout, stderr) => {
-        const kind = classifyStatusProbe(err, `${stderr}`);
+      (err, stdout, stderr) => {
+        const kind = classifyStatusProbe(err, `${stderr}`, `${stdout}`);
         if (kind === "unknown_subcommand") resolve("none");
         else resolve(kind);
       },
@@ -290,10 +314,7 @@ export async function refreshEngineHealth(
     };
     const prior = previous[preset.engineId];
     const sessionReasonClass =
-      prior?.reasonClass &&
-      (prior.reasonClass === "rate_limited" ||
-        prior.reasonClass === "quota_exhausted" ||
-        prior.reasonClass === "unauthorized")
+      prior?.reasonClass === "rate_limited" || prior?.reasonClass === "quota_exhausted"
         ? prior.reasonClass
         : null;
 

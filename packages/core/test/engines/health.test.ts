@@ -6,6 +6,7 @@ import { LOCAL_CONTEXT_FLOOR } from "../../src/engines/types.js";
 import {
   applyEngineSessionError,
   authModeFromSignals,
+  classifyStatusProbe,
   getCachedHealth,
   refreshEngineHealth,
 } from "../../src/engines/health.js";
@@ -45,6 +46,12 @@ describe("authModeFromSignals", () => {
     expect(r.authMode).toBe("subscription");
     expect(r.health).toBe("degraded");
     expect(r.reasonClass).toBe("rate_limited");
+  });
+
+  it("maps status auth_failure to unauthorized", () => {
+    const r = authModeFromSignals({ installed: true, statusProbe: "auth_failure" });
+    expect(r.health).toBe("unauthorized");
+    expect(r.reasonClass).toBe("unauthorized");
   });
 
   it("marks local pack below context floor as degraded", () => {
@@ -98,6 +105,55 @@ describe("refreshEngineHealth", () => {
     expect(raw).not.toContain("sk-");
   });
 
+  it("recovers to ok after successful status probe when cache had unauthorized", async () => {
+    const hive = await hiveRoot();
+    await writeFile(
+      join(enginesRoot(hive), "health.json"),
+      JSON.stringify({
+        claude: {
+          engineId: "claude",
+          authMode: "subscription",
+          health: "unauthorized",
+          reasonClass: "unauthorized",
+          binaryVersion: "1.0",
+          checkedAt: "2020-01-01T00:00:00.000Z",
+        },
+      }),
+    );
+
+    await refreshEngineHealth(hive, {
+      envPath: "/bin",
+      env: { PATH: "/bin" },
+      execFile: vi.fn((_cmd, args: string[], _opts, cb) => {
+        if (args.join(" ") === "--version") cb(null, "claude 1.0", "");
+        else if (args.join(" ") === "auth status") cb(null, "logged in", "");
+        else cb(new Error("skip"), "", "");
+      }) as never,
+      detectRows: [{ engineId: "claude", installed: true, binary: "/bin/claude" }],
+    });
+
+    const cached = await getCachedHealth(hive, "claude");
+    expect(cached?.health).toBe("ok");
+    expect(cached?.authMode).toBe("subscription");
+    expect(cached?.reasonClass).toBeNull();
+  });
+
+  it("does not mark unauthorized on non-auth status probe failures", async () => {
+    const hive = await hiveRoot();
+    const rows = await refreshEngineHealth(hive, {
+      envPath: "/bin",
+      env: { PATH: "/bin" },
+      execFile: vi.fn((_cmd, args: string[], _opts, cb) => {
+        if (args[0] === "--version") cb(null, "1.0", "");
+        else cb(Object.assign(new Error("timeout"), { code: "ETIMEDOUT" }), "", "");
+      }) as never,
+      detectRows: [{ engineId: "claude", installed: true, binary: "/bin/claude" }],
+    });
+    const claude = rows.find((r) => r.engineId === "claude");
+    expect(claude?.health).toBe("ok");
+    expect(claude?.authMode).toBe("unknown");
+  });
+
   it("never logs secret env values during refresh", async () => {
     const hive = await hiveRoot();
     const secret = "sk-test-never-log-me";
@@ -119,6 +175,21 @@ describe("refreshEngineHealth", () => {
   });
 });
 
+describe("classifyStatusProbe", () => {
+  it("ignores unknown subcommand errors", () => {
+    expect(classifyStatusProbe(new Error("fail"), "unknown command: auth")).toBe("unknown_subcommand");
+  });
+
+  it("treats timeout as non-auth probe failure", () => {
+    const err = Object.assign(new Error("timeout"), { code: "ETIMEDOUT" });
+    expect(classifyStatusProbe(err, "")).toBe("none");
+  });
+
+  it("detects auth failures from stderr hints", () => {
+    expect(classifyStatusProbe(new Error("exit 1"), "Error: not logged in")).toBe("auth_failure");
+  });
+});
+
 describe("applyEngineSessionError", () => {
   it("updates cached health to degraded for quota_exhausted", async () => {
     const hive = await hiveRoot();
@@ -136,6 +207,24 @@ describe("applyEngineSessionError", () => {
     const cached = await getCachedHealth(hive, "codex");
     expect(cached?.health).toBe("degraded");
     expect(cached?.reasonClass).toBe("quota_exhausted");
+  });
+
+  it("marks unauthorized without changing authMode", async () => {
+    const hive = await hiveRoot();
+    await refreshEngineHealth(hive, {
+      envPath: "/bin",
+      env: { PATH: "/bin", OPENAI_API_KEY: "set" },
+      execFile: vi.fn((_cmd, args: string[], _opts, cb) => {
+        if (args[0] === "--version") cb(null, "1.0", "");
+        else cb(new Error("skip"), "", "");
+      }) as never,
+      detectRows: [{ engineId: "codex", installed: true, binary: "/bin/codex" }],
+    });
+
+    await applyEngineSessionError(hive, "codex", "unauthorized");
+    const cached = await getCachedHealth(hive, "codex");
+    expect(cached?.authMode).toBe("byok");
+    expect(cached?.health).toBe("unauthorized");
   });
 });
 
