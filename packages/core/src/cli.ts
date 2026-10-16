@@ -18,7 +18,16 @@ import {
   loadState,
   saveState,
   markInProgress,
+  reconcileState,
 } from "./forge-loop.js";
+import {
+  assertBeginTaskAllowed,
+  formatDispatchPathRequired,
+  hiveSyncTarget,
+  maybeSyncHive,
+  readMaxReviewFailures,
+  resolveHiveAnchor,
+} from "./command-plane/dispatch-guard.js";
 import { initProject } from "./init.js";
 import { syncStatusFromFiles } from "./fr-status.js";
 import {
@@ -45,15 +54,20 @@ export interface CliResult {
   stdout: string;
 }
 
-export async function runCli(argv: string[]): Promise<CliResult> {
+/** In-process options. `internalFromDispatch` is not a CLI flag. */
+export interface RunCliOptions {
+  internalFromDispatch?: boolean;
+}
+
+export async function runCli(argv: string[], options?: RunCliOptions): Promise<CliResult> {
   try {
-    return await runCliInner(argv);
+    return await runCliInner(argv, options);
   } catch (err) {
     return { code: 0, stdout: `Error: ${err instanceof Error ? err.message : String(err)}` };
   }
 }
 
-async function runCliInner(argv: string[]): Promise<CliResult> {
+async function runCliInner(argv: string[], options?: RunCliOptions): Promise<CliResult> {
   const [command, ...rest] = argv;
 
   if (command === "mcp") {
@@ -190,17 +204,17 @@ async function runCliInner(argv: string[]): Promise<CliResult> {
     }
     try {
       const tasks = parsePlan(await readFile(values.plan as string, "utf8"));
-      const state = (await loadState(values.dir as string)) ?? initState(tasks);
+      const specDir = values.dir as string;
+      const state = (await loadState(specDir)) ?? initState(tasks);
       const result = await syncStatusFromFiles(
-        values.dir as string,
+        specDir,
         values.spec as string,
         values.plan as string,
         state,
       );
-      return {
-        code: 0,
-        stdout: formatSyncStatusReport(result, values.verbose === true),
-      };
+      const stdout = formatSyncStatusReport(result, values.verbose === true);
+      await maybeSyncHive(hiveSyncTarget(resolveHiveAnchor(specDir), specDir, values.plan as string));
+      return { code: 0, stdout };
     } catch (err) {
       return { code: 0, stdout: formatCommandError("sync-status", err) };
     }
@@ -229,17 +243,25 @@ async function runCliInner(argv: string[]): Promise<CliResult> {
     }
     try {
       const tasks = parsePlan(await readFile(values.plan as string, "utf8"));
-      const state = (await loadState(values.dir as string)) ?? initState(tasks);
+      const specDir = values.dir as string;
+      const anchor = resolveHiveAnchor(specDir);
+      const gate = assertBeginTaskAllowed({
+        hiveExists: anchor.hiveExists,
+        internalFromDispatch: options?.internalFromDispatch === true,
+      });
+      if (!gate.ok) {
+        return { code: 1, stdout: formatDispatchPathRequired() };
+      }
+      const state = reconcileState(tasks, await loadState(specDir));
       markInProgress(state, values.task as string);
-      await saveState(values.dir as string, state);
-      return {
-        code: 0,
-        stdout: formatBeginTaskReport(
-          values.task as string,
-          { dir: values.dir as string, cwd: process.cwd() },
-          values.verbose === true,
-        ),
-      };
+      await saveState(specDir, state);
+      const stdout = formatBeginTaskReport(
+        values.task as string,
+        { dir: specDir, cwd: process.cwd() },
+        values.verbose === true,
+      );
+      await maybeSyncHive(hiveSyncTarget(anchor, specDir, values.plan as string));
+      return { code: 0, stdout };
     } catch (err) {
       return { code: 0, stdout: formatCommandError("begin-task", err) };
     }
@@ -371,12 +393,14 @@ async function runCliInner(argv: string[]): Promise<CliResult> {
     }
     try {
       const tasks = parsePlan(await readFile(values.plan as string, "utf8"));
-      const state = (await loadState(values.dir as string)) ?? initState(tasks);
+      const specDir = values.dir as string;
+      const anchor = resolveHiveAnchor(specDir);
+      const state = reconcileState(tasks, await loadState(specDir));
       const passed = values.passed === "true";
       recordResult(state, values.task as string, passed, {
-        maxReviewFailures: 3,
+        maxReviewFailures: await readMaxReviewFailures(anchor),
       });
-      await saveState(values.dir as string, state);
+      await saveState(specDir, state);
       let statusPath: string | undefined;
       if (values.spec !== undefined) {
         statusPath = await writeStatusFile(
@@ -401,15 +425,14 @@ async function runCliInner(argv: string[]): Promise<CliResult> {
           },
         });
       }
-      return {
-        code: 0,
-        stdout: formatRecordResultReport(
-          values.task as string,
-          passed,
-          { dir: values.dir as string, statusPath, coordinatorPath, cwd: process.cwd() },
-          values.verbose === true,
-        ),
-      };
+      const stdout = formatRecordResultReport(
+        values.task as string,
+        passed,
+        { dir: specDir, statusPath, coordinatorPath, cwd: process.cwd() },
+        values.verbose === true,
+      );
+      await maybeSyncHive(hiveSyncTarget(anchor, specDir, values.plan as string));
+      return { code: 0, stdout };
     } catch (err) {
       return { code: 0, stdout: formatCommandError("record-result", err) };
     }

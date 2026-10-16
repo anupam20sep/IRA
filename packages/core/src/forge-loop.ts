@@ -35,6 +35,24 @@ export function initState(tasks: Task[]): ForgeState {
   return state;
 }
 
+/**
+ * Add plan task ids that forge state does not have yet.
+ * Existing rows stay as they are, including ids the plan no longer lists.
+ */
+export function reconcileState(tasks: Task[], previous: ForgeState | null): ForgeState {
+  const merged: ForgeState["tasks"] = {};
+  if (previous) {
+    for (const [id, row] of Object.entries(previous.tasks)) {
+      merged[id] = { status: row.status, reviewFailures: row.reviewFailures };
+    }
+  }
+  for (const task of tasks) {
+    if (merged[task.id]) continue;
+    merged[task.id] = { status: "pending", reviewFailures: 0 };
+  }
+  return { tasks: merged };
+}
+
 export function nextTask(tasks: Task[], state: ForgeState): Task | null {
   for (const t of tasks) {
     const s = state.tasks[t.id];

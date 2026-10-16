@@ -12,7 +12,15 @@ import { routeModel } from "./model-router.js";
 import { type HarnessId } from "./harness-model-map.js";
 import { resolveDispatchModel } from "./models-config.js";
 import { scaffold } from "./scaffold.js";
-import { initState, forgeStatus, nextTask, recordResult, loadState, saveState, markInProgress } from "./forge-loop.js";
+import { initState, forgeStatus, nextTask, recordResult, loadState, saveState, markInProgress, reconcileState } from "./forge-loop.js";
+import {
+  assertBeginTaskAllowed,
+  formatDispatchPathRequired,
+  hiveSyncTarget,
+  maybeSyncHive,
+  readMaxReviewFailures,
+  resolveHiveAnchor,
+} from "./command-plane/dispatch-guard.js";
 import { discoverPersonas } from "./persona-discovery.js";
 import { initProject, formatInitReport, formatInitError } from "./init.js";
 import { buildStatusSnapshot, writeStatusFile } from "./fr-status.js";
@@ -172,6 +180,7 @@ export function buildToolDefinitions(): ToolDef[] {
         specText: z.string(),
         planText: z.string(),
         stateDir: z.string().optional(),
+        planPath: z.string().optional(),
         verbose: z.boolean().optional(),
       },
       handler: async (args) => {
@@ -195,14 +204,13 @@ export function buildToolDefinitions(): ToolDef[] {
           );
           const payload = { ok: true, path, snapshot };
           const verbose = (args.verbose as boolean | undefined) ?? true;
-          return {
-            content: [
-              {
-                type: "text",
-                text: verbose ? formatSyncStatusReport({ path, snapshot }, true) : JSON.stringify(payload, null, 2),
-              },
-            ],
-          };
+          const text = verbose ? formatSyncStatusReport({ path, snapshot }, true) : JSON.stringify(payload, null, 2);
+          const planPath = args.planPath as string | undefined;
+          if (planPath) {
+            const forgeDir = stateDir ?? (args.specDir as string);
+            await maybeSyncHive(hiveSyncTarget(resolveHiveAnchor(forgeDir), forgeDir, planPath));
+          }
+          return { content: [{ type: "text", text }] };
         } catch (err) {
           return { content: [{ type: "text", text: formatCommandError("sync-status", err) }] };
         }
@@ -244,16 +252,26 @@ export function buildToolDefinitions(): ToolDef[] {
       handler: async (args) => {
         try {
           const tasks = parsePlan(args.planText as string);
-          const state = (await loadState(args.stateDir as string)) ?? initState(tasks);
+          const stateDir = args.stateDir as string;
+          // Not a schema field. The MCP client cannot set this; dispatch-task calls the handler in-process.
+          const anchor = resolveHiveAnchor(stateDir);
+          const gate = assertBeginTaskAllowed({
+            hiveExists: anchor.hiveExists,
+            internalFromDispatch: args.internalFromDispatch === true,
+          });
+          if (!gate.ok) {
+            return { content: [{ type: "text", text: formatDispatchPathRequired() }] };
+          }
+          const state = reconcileState(tasks, await loadState(stateDir));
           const taskId = args.taskId as string;
           markInProgress(state, taskId);
-          await saveState(args.stateDir as string, state);
+          await saveState(stateDir, state);
           const verbose = (args.verbose as boolean | undefined) ?? true;
-          const text = formatBeginTaskReport(
-            taskId,
-            { dir: args.stateDir as string, cwd: process.cwd() },
-            verbose,
-          );
+          const text = formatBeginTaskReport(taskId, { dir: stateDir, cwd: process.cwd() }, verbose);
+          const planPath = args.planPath as string | undefined;
+          if (typeof planPath === "string") {
+            await maybeSyncHive(hiveSyncTarget(anchor, stateDir, planPath));
+          }
           return { content: [{ type: "text", text }] };
         } catch (err) {
           return { content: [{ type: "text", text: formatCommandError("begin-task", err) }] };
@@ -305,13 +323,15 @@ export function buildToolDefinitions(): ToolDef[] {
       handler: async (args) => {
         try {
           const tasks = parsePlan(args.planText as string);
-          const state = (await loadState(args.stateDir as string)) ?? initState(tasks);
+          const stateDir = args.stateDir as string;
+          const anchor = resolveHiveAnchor(stateDir);
+          const state = reconcileState(tasks, await loadState(stateDir));
           const taskId = args.taskId as string;
           const passed = args.passed as boolean;
           recordResult(state, taskId, passed, {
-            maxReviewFailures: 3,
+            maxReviewFailures: await readMaxReviewFailures(anchor),
           });
-          await saveState(args.stateDir as string, state);
+          await saveState(stateDir, state);
           let statusPath: string | undefined;
           const specText = args.specText as string | undefined;
           const specDir = args.specDir as string | undefined;
@@ -342,9 +362,13 @@ export function buildToolDefinitions(): ToolDef[] {
           const text = formatRecordResultReport(
             taskId,
             passed,
-            { dir: args.stateDir as string, statusPath, coordinatorPath, cwd: process.cwd() },
+            { dir: stateDir, statusPath, coordinatorPath, cwd: process.cwd() },
             verbose,
           );
+          const planPath = args.planPath as string | undefined;
+          if (typeof planPath === "string") {
+            await maybeSyncHive(hiveSyncTarget(anchor, stateDir, planPath));
+          }
           return { content: [{ type: "text", text }] };
         } catch (err) {
           return { content: [{ type: "text", text: formatCommandError("record-result", err) }] };
