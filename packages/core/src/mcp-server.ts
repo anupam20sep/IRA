@@ -21,6 +21,7 @@ import {
   readMaxReviewFailures,
   resolveHiveAnchor,
 } from "./command-plane/dispatch-guard.js";
+import { idleWakeAfterPass } from "./command-plane/dispatch.js";
 import { maybeReplanAfterRecordResult } from "./command-plane/replan.js";
 import { discoverPersonas } from "./persona-discovery.js";
 import { initProject, formatInitReport, formatInitError } from "./init.js";
@@ -380,6 +381,16 @@ export function buildToolDefinitions(): ToolDef[] {
               forgeStatus: recorded.status,
               reviewFailures: recorded.reviewFailures,
               ceiling: maxReviewFailures,
+            });
+          }
+          if (passed) {
+            await idleWakeAfterPass({
+              hiveExists: anchor.hiveExists,
+              hiveRoot: anchor.hiveExists ? anchor.hiveRoot : undefined,
+              featureId: anchor.hiveExists ? anchor.featureId : undefined,
+              cwd: anchor.hiveExists ? anchor.repositoryRoot : undefined,
+              completedTaskId: taskId,
+              passed: true,
             });
           }
           return { content: [{ type: "text", text }] };

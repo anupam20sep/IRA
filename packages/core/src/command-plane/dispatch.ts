@@ -17,6 +17,7 @@ import {
   HOOK_FAILED_CLOSED,
   safeBeforeDispatch,
   safeEngineDispatch,
+  safeMatchCapabilities,
   type DispatchIntent,
 } from "./hooks.js";
 import { resolveRepositoryRoot } from "./paths.js";
@@ -26,9 +27,10 @@ import {
   HiveLedgerSchema,
   IraEventSchema,
   RosterAgentSchema,
+  agentIdSchema,
   featureIdSchema,
 } from "./schema.js";
-import { EVENT_LOCK_WAIT_MS, appendJsonlLine, withLock, writeJsonAtomic } from "./store.js";
+import { EVENT_LOCK_WAIT_MS, LEDGER_LOCK_WAIT_MS, appendJsonlLine, withLock, writeJsonAtomic } from "./store.js";
 import type { AskMeReasonClass, AutonomySettings, HiveLedger, HiveTask, RosterAgent } from "./types.js";
 
 const HOST_ENGINES = new Set(["claude", "codex", "cursor-agent"]);
@@ -73,6 +75,105 @@ export function dispatchRefusalForHold(input: {
 }): { ok: false; code: "DISPATCH_HELD" } | null {
   if (input.hold === true) return { ok: false, code: "DISPATCH_HELD" };
   return null;
+}
+
+export type AutonomyWakeMode = "observe" | "supervised" | "autonomous";
+
+/**
+ * Supervised and autonomous idle wake steer through dispatch-task.
+ * Observe recommends and does not.
+ */
+export function idleWakeUsesDispatchTask(autonomy: AutonomyWakeMode): boolean {
+  return autonomy === "supervised" || autonomy === "autonomous";
+}
+
+export type IdleWakeContext = {
+  hiveExists: boolean;
+  hiveRoot?: string;
+  featureId?: string;
+  cwd?: string;
+  completedTaskId: string;
+  passed: boolean;
+};
+
+export type IdleWakeResult =
+  | {
+      woke: false;
+      reason: "not_passed" | "no_hive" | "no_ready_task" | "settings" | "unassigned" | "error";
+    }
+  | { woke: true; mode: "recommended"; taskId: string; agentId: string | null }
+  | { woke: true; mode: "dispatched"; taskId: string; via: "dispatch-task"; began: boolean };
+
+/**
+ * After a passing record-result, assign the next DAG-ready task.
+ * Supervised and autonomous call dispatchTask. Observe emits task.recommended only.
+ * This function does not argv begin-task.
+ */
+export async function idleWakeAfterPass(ctx: IdleWakeContext): Promise<IdleWakeResult> {
+  try {
+    if (!ctx.passed) return { woke: false, reason: "not_passed" };
+    if (!ctx.hiveExists || !ctx.hiveRoot || !ctx.featureId) return { woke: false, reason: "no_hive" };
+    if (!featureIdSchema.safeParse(ctx.featureId).success) return { woke: false, reason: "no_hive" };
+
+    const settings = await readSettings(ctx.hiveRoot);
+    if (!settings) return { woke: false, reason: "settings" };
+
+    const loaded = await readLedger(ctx.hiveRoot, ctx.featureId);
+    if (loaded === "missing" || loaded === "corrupt") return { woke: false, reason: "no_ready_task" };
+
+    const next = nextWakeTask(loaded.ledger.tasks, ctx.completedTaskId);
+    if (!next) return { woke: false, reason: "no_ready_task" };
+
+    const roster = await readRoster(ctx.hiveRoot);
+    if (roster === "corrupt") return { woke: false, reason: "settings" };
+    const finished =
+      loaded.ledger.tasks.find((task) => task.id === ctx.completedTaskId)?.assigneeAgentId ?? null;
+    const chosen = await chooseWakeAssignee(roster ?? [], next, finished);
+    const agentId = next.assigneeAgentId ?? chosen?.id ?? null;
+
+    if (!idleWakeUsesDispatchTask(settings.autonomy)) {
+      await appendWakeEvent(ctx.hiveRoot, ctx.featureId, "task.recommended", {
+        taskId: next.id,
+        agentId,
+      });
+      return { woke: true, mode: "recommended", taskId: next.id, agentId };
+    }
+
+    if (!agentId) {
+      await appendWakeEvent(ctx.hiveRoot, ctx.featureId, "task.unassigned", {
+        taskId: next.id,
+        reason: "no_idle_match",
+      });
+      return { woke: false, reason: "unassigned" };
+    }
+
+    if (next.assigneeAgentId === null && chosen && agentIdSchema.safeParse(chosen.id).success) {
+      const wrote = await writeAssignee(ctx.hiveRoot, ctx.featureId, next.id, chosen.id);
+      if (wrote) {
+        await appendWakeEvent(ctx.hiveRoot, ctx.featureId, "task.assigned", {
+          taskId: next.id,
+          agentId: chosen.id,
+        });
+      }
+    }
+
+    const dispatched = await dispatchTask({
+      featureId: ctx.featureId,
+      taskId: next.id,
+      cwd: ctx.cwd,
+      internal: true,
+      freshSubagent: true,
+    });
+    return {
+      woke: true,
+      mode: "dispatched",
+      taskId: next.id,
+      via: "dispatch-task",
+      began: dispatched.began,
+    };
+  } catch {
+    return { woke: false, reason: "error" };
+  }
 }
 
 /** A false fresh-subagent flag is invalid and must not reach a process start. */
@@ -225,6 +326,98 @@ function isDagReady(task: HiveTask, tasks: HiveTask[]): boolean {
   if (task.status !== "todo") return false;
   const byId = new Map(tasks.map((row) => [row.id, row]));
   return task.dependsOn.every((id) => byId.get(id)?.status === "done");
+}
+
+function nextWakeTask(tasks: HiveTask[], completedTaskId: string): HiveTask | null {
+  const byId = new Map(tasks.map((task) => [task.id, task]));
+  for (const task of tasks) {
+    if (task.id === completedTaskId) continue;
+    if (task.status !== "todo" || task.hold === true || task.drift === "removed") continue;
+    if (task.kind === "code" && task.implementsFr.length === 0) continue;
+    if (!task.dependsOn.every((id) => byId.get(id)?.status === "done")) continue;
+    return task;
+  }
+  return null;
+}
+
+async function chooseWakeAssignee(
+  roster: RosterAgent[],
+  task: HiveTask,
+  finishedAgentId: string | null,
+): Promise<RosterAgent | null> {
+  const pool = roster.filter((agent) => {
+    if (agent.status === "offline" || agent.status === "blocked") return false;
+    if (agent.status === "idle") return true;
+    return agent.id === finishedAgentId;
+  });
+  if (pool.length === 0) return null;
+
+  const hooked = await safeMatchCapabilities({ capabilityTags: task.capabilityTags }, pool, {});
+  if (hooked && pool.some((agent) => agent.id === hooked.id)) return hooked;
+
+  const tags = task.capabilityTags;
+  const matches = (agent: RosterAgent) =>
+    tags.length === 0 || agent.capabilityTags.some((tag) => tags.includes(tag));
+  if (finishedAgentId) {
+    const finisher = pool.find((agent) => agent.id === finishedAgentId);
+    if (finisher && matches(finisher)) return finisher;
+  }
+  return pool.find(matches) ?? null;
+}
+
+async function writeAssignee(
+  hiveRoot: string,
+  featureId: string,
+  taskId: string,
+  agentId: string,
+): Promise<boolean> {
+  const locked = await withLock(
+    join(hiveRoot, "locks", `ledger-${featureId}.lock`),
+    { waitMs: LEDGER_LOCK_WAIT_MS },
+    async () => {
+      const loaded = await readLedger(hiveRoot, featureId);
+      if (loaded === "missing" || loaded === "corrupt") return false;
+      const now = new Date().toISOString();
+      let changed = false;
+      const tasks = loaded.ledger.tasks.map((row) => {
+        if (row.id !== taskId || row.assigneeAgentId !== null) return row;
+        changed = true;
+        return { ...row, assigneeAgentId: agentId, updatedAt: now };
+      });
+      if (!changed) return false;
+      const parsed = HiveLedgerSchema.safeParse({ ...loaded.ledger, updatedAt: now, tasks });
+      if (!parsed.success) return false;
+      await writeJsonAtomic(join(hiveRoot, "ledger", `${featureId}.json`), parsed.data);
+      return true;
+    },
+  );
+  return locked.ok && locked.value === true;
+}
+
+async function appendWakeEvent(
+  hiveRoot: string,
+  featureId: string,
+  type: string,
+  data: Record<string, unknown>,
+): Promise<void> {
+  try {
+    await access(join(hiveRoot, "events"), constants.W_OK);
+  } catch {
+    return;
+  }
+  const event = IraEventSchema.safeParse({
+    id: `evt_${randomUUID()}`,
+    type,
+    version: 1,
+    ts: new Date().toISOString(),
+    featureId,
+    actor: { kind: "ira", id: "ira" },
+    data,
+  });
+  if (!event.success) return;
+  await withLock(join(hiveRoot, "locks", "events.lock"), { waitMs: EVENT_LOCK_WAIT_MS }, () =>
+    appendJsonlLine(join(hiveRoot, "events", "events.jsonl"), event.data),
+  );
 }
 
 function pickAssignee(roster: RosterAgent[] | null, task: HiveTask): RosterAgent | null {
@@ -492,24 +685,7 @@ async function appendDispatched(
   intent: DispatchIntent,
   internal: boolean,
 ): Promise<void> {
-  try {
-    await access(join(hiveRoot, "events"), constants.W_OK);
-  } catch {
-    return;
-  }
-  const event = IraEventSchema.safeParse({
-    id: `evt_${randomUUID()}`,
-    type: "task.dispatched",
-    version: 1,
-    ts: new Date().toISOString(),
-    featureId,
-    actor: { kind: "ira", id: "ira" },
-    data: { intent, internal, accepted: null },
-  });
-  if (!event.success) return;
-  await withLock(join(hiveRoot, "locks", "events.lock"), { waitMs: EVENT_LOCK_WAIT_MS }, () =>
-    appendJsonlLine(join(hiveRoot, "events", "events.jsonl"), event.data),
-  );
+  await appendWakeEvent(hiveRoot, featureId, "task.dispatched", { intent, internal, accepted: null });
 }
 
 async function readText(path: string): Promise<string | null | "unreadable"> {

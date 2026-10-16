@@ -28,6 +28,7 @@ import {
   readMaxReviewFailures,
   resolveHiveAnchor,
 } from "./command-plane/dispatch-guard.js";
+import { idleWakeAfterPass } from "./command-plane/dispatch.js";
 import { maybeReplanAfterRecordResult } from "./command-plane/replan.js";
 import { initProject } from "./init.js";
 import { syncStatusFromFiles } from "./fr-status.js";
@@ -443,6 +444,16 @@ async function runCliInner(argv: string[], options?: RunCliOptions): Promise<Cli
           forgeStatus: recorded.status,
           reviewFailures: recorded.reviewFailures,
           ceiling: maxReviewFailures,
+        });
+      }
+      if (passed) {
+        await idleWakeAfterPass({
+          hiveExists: anchor.hiveExists,
+          hiveRoot: anchor.hiveExists ? anchor.hiveRoot : undefined,
+          featureId: anchor.hiveExists ? anchor.featureId : undefined,
+          cwd: anchor.hiveExists ? anchor.repositoryRoot : undefined,
+          completedTaskId: values.task as string,
+          passed: true,
         });
       }
       return { code: 0, stdout };
