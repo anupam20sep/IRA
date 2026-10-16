@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
-import { mkdtemp, mkdir, writeFile, rm } from "node:fs/promises";
+import { mkdtemp, mkdir, readFile, writeFile, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { runCli } from "../src/cli.js";
@@ -287,6 +287,126 @@ describe("runCli command-plane JSON", () => {
     expect(parsed).toMatchObject({ ok: false, error: "INVALID_INPUT" });
   });
 
+  it("task-hold routes like task hold", async () => {
+    await seedHive();
+    const { code, stdout } = await runCli([
+      "task-hold",
+      "--cwd",
+      root,
+      "--feature",
+      FEATURE,
+      "--task",
+      "T001",
+      "--hold",
+      "true",
+    ]);
+    expect(code).toBe(0);
+    expect(stdout).not.toMatch(/Unknown command/);
+    expect(JSON.parse(stdout)).toMatchObject({
+      ok: true,
+      task: { id: "T001", hold: true, reviewFailures: 0 },
+    });
+  });
+
+  it("task-abort accepts --confirm true and a boolean --confirm flag", async () => {
+    await seedHive();
+    const flagged = await runCli([
+      "task",
+      "abort",
+      "--cwd",
+      root,
+      "--feature",
+      FEATURE,
+      "--task",
+      "T001",
+      "--confirm",
+      "--reason",
+      "stop",
+    ]);
+    expect(flagged.code).toBe(0);
+    expect(JSON.parse(flagged.stdout)).toMatchObject({
+      ok: true,
+      task: { id: "T001", status: "blocked", reviewFailures: 0 },
+    });
+
+    await seedHive();
+    const spelled = await runCli([
+      "task-abort",
+      "--cwd",
+      root,
+      "--feature",
+      FEATURE,
+      "--task",
+      "T001",
+      "--confirm",
+      "true",
+      "--reason",
+      "stop",
+    ]);
+    expect(spelled.code).toBe(0);
+    expect(spelled.stdout).not.toMatch(/Unknown command/);
+    expect(JSON.parse(spelled.stdout)).toMatchObject({
+      ok: true,
+      task: { id: "T001", status: "blocked", hold: false, reviewFailures: 0, abortReason: "stop" },
+    });
+  });
+
+  it("task-reassign updates the assignee and refuses an offline agent", async () => {
+    await seedHive();
+    await addRosterAgent("agent-two", "idle");
+    const forgeBefore = await readFile(join(root, "specs", FEATURE, ".superspec", "state.json"), "utf8");
+
+    const { code, stdout } = await runCli([
+      "task-reassign",
+      "--cwd",
+      root,
+      "--feature",
+      FEATURE,
+      "--task",
+      "T001",
+      "--agent",
+      "agent-two",
+    ]);
+    expect(code).toBe(0);
+    expect(stdout).not.toMatch(/Unknown command/);
+    expect(JSON.parse(stdout)).toMatchObject({
+      ok: true,
+      task: { id: "T001", assigneeAgentId: "agent-two", status: "todo", reviewFailures: 0 },
+    });
+    expect(await readFile(join(root, "specs", FEATURE, ".superspec", "state.json"), "utf8")).toBe(forgeBefore);
+    const events = await readFile(join(root, ".superspec", "hive", "events", "events.jsonl"), "utf8");
+    expect(events).toContain("task.reassigned");
+
+    await seedHive();
+    await addRosterAgent("agent-away", "offline");
+    const refused = await runCli([
+      "task-reassign",
+      "--cwd",
+      root,
+      "--feature",
+      FEATURE,
+      "--task",
+      "T001",
+      "--agent",
+      "agent-away",
+    ]);
+    expect(refused.code).toBe(1);
+    expect(JSON.parse(refused.stdout)).toMatchObject({ ok: false });
+    const ledger = JSON.parse(
+      await readFile(join(root, ".superspec", "hive", "ledger", `${FEATURE}.json`), "utf8"),
+    ) as { tasks: Array<{ assigneeAgentId: string }> };
+    expect(ledger.tasks[0]?.assigneeAgentId).toBe("agent-host");
+  });
+
+  it("help routing accepts hyphenated task-hold, task-abort, and task-reassign", async () => {
+    for (const command of ["task-hold", "task-abort", "task-reassign"]) {
+      const out = await runCli([command, "--help"]);
+      expect(out.code).toBe(0);
+      expect(out.stdout).toContain(command);
+      expect(out.stdout).not.toMatch(/Unknown command/);
+    }
+  });
+
   it("away on accepts --allow-absent-ci true in JSON settings", async () => {
     await seedHive();
     const { code, stdout } = await runCli([
@@ -364,6 +484,24 @@ describe("runCli command-plane JSON", () => {
     });
     await mkdir(join(hive, "ledger"), { recursive: true });
     await writeFile(join(hive, "ledger", `${FEATURE}.json`), `${JSON.stringify(ledger)}\n`);
+  }
+
+  async function addRosterAgent(id: string, status: RosterAgent["status"]): Promise<void> {
+    const path = join(root, ".superspec", "hive", "roster.json");
+    const roster = RosterAgentSchema.array().parse(JSON.parse(await readFile(path, "utf8")));
+    roster.push({
+      id,
+      name: id,
+      personaPath: null,
+      capabilityTags: [],
+      engine: null,
+      model: null,
+      workspace: null,
+      worktreePolicy: "shared",
+      status,
+      origin: "manual",
+    });
+    await writeFile(path, `${JSON.stringify(RosterAgentSchema.array().parse(roster))}\n`);
   }
 });
 

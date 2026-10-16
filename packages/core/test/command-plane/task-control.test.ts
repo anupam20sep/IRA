@@ -11,6 +11,7 @@ import {
   abortWithoutConfirmWritesNothing,
   taskAbort,
   taskHold,
+  taskReassign,
 } from "../../src/command-plane/task-control.js";
 
 const roots: string[] = [];
@@ -147,6 +148,87 @@ describe("taskAbort integration", () => {
     expect(await eventTypes(ctx.hive)).toEqual([]);
   });
 });
+
+describe("taskReassign", () => {
+  it("updates assigneeAgentId and updatedAt only and appends a reassign event", async () => {
+    const ctx = await seeded({ reviewFailures: 2, forgeStatus: "in_progress", hiveStatus: "doing" });
+    await addAgent(ctx.hive, "agent-two", "idle");
+    const forgeBefore = await readFile(join(ctx.specDir, ".superspec", "state.json"), "utf8");
+
+    const result = await taskReassign({
+      hiveRoot: ctx.hive,
+      featureId: "001-demo",
+      taskId: "T001",
+      agentId: "agent-two",
+      now: NOW,
+    });
+
+    expect(result).toMatchObject({
+      ok: true,
+      task: {
+        id: "T001",
+        assigneeAgentId: "agent-two",
+        status: "doing",
+        reviewFailures: 2,
+        updatedAt: NOW,
+      },
+    });
+    const task = (await readLedger(ctx.hive)).tasks[0];
+    expect(task).toMatchObject({
+      assigneeAgentId: "agent-two",
+      status: "doing",
+      hold: false,
+      reviewFailures: 2,
+      updatedAt: NOW,
+    });
+    expect(await readFile(join(ctx.specDir, ".superspec", "state.json"), "utf8")).toBe(forgeBefore);
+    expect(await eventTypes(ctx.hive)).toEqual(["task.reassigned"]);
+  });
+
+  it("refuses an offline or missing agent without writing the ledger", async () => {
+    const ctx = await seeded({ hiveStatus: "doing", reviewFailures: 1 });
+    await addAgent(ctx.hive, "agent-away", "offline");
+    const ledgerBefore = await readFile(join(ctx.hive, "ledger", "001-demo.json"), "utf8");
+
+    const offline = await taskReassign({
+      hiveRoot: ctx.hive,
+      featureId: "001-demo",
+      taskId: "T001",
+      agentId: "agent-away",
+      now: NOW,
+    });
+    const missing = await taskReassign({
+      hiveRoot: ctx.hive,
+      featureId: "001-demo",
+      taskId: "T001",
+      agentId: "agent-missing",
+      now: NOW,
+    });
+
+    expect(offline).toMatchObject({ ok: false, error: "INVALID_INPUT" });
+    expect(missing).toMatchObject({ ok: false, error: "INVALID_INPUT" });
+    expect(await readFile(join(ctx.hive, "ledger", "001-demo.json"), "utf8")).toBe(ledgerBefore);
+    expect(await eventTypes(ctx.hive)).toEqual([]);
+  });
+});
+
+async function addAgent(hive: string, id: string, status: RosterAgent["status"]): Promise<void> {
+  const path = join(hive, "roster.json");
+  const roster = RosterAgentSchema.array().parse(JSON.parse(await readFile(path, "utf8")));
+  roster.push({
+    id,
+    name: id,
+    personaPath: null,
+    capabilityTags: [],
+    engine: null,
+    model: null,
+    workspace: null,
+    worktreePolicy: "shared",
+    status,
+    origin: "manual",
+  });
+  await writeFile(path, `${JSON.stringify(RosterAgentSchema.array().parse(roster))}\n`);
+}
 
 async function seeded(options: {
   reviewFailures?: number;

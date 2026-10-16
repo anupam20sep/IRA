@@ -24,7 +24,7 @@ import {
   AskMeItemSchema,
   featureIdSchema,
 } from "./schema.js";
-import { taskAbort, taskHold } from "./task-control.js";
+import { taskAbort, taskHold, taskReassign } from "./task-control.js";
 import { appendJsonlLine, writeJsonAtomic } from "./store.js";
 import type { CommandPlaneErrorCode } from "./types.js";
 export type CommandPlaneCliResult = { code: number; stdout: string };
@@ -38,6 +38,9 @@ const CP_ROOT_COMMANDS = new Set([
   "away",
   "dispatch-task",
   "task",
+  "task-hold",
+  "task-abort",
+  "task-reassign",
   "mailbox",
   "doctor",
 ]);
@@ -56,6 +59,7 @@ export function commandPlaneHelpSummary(): string {
     "away on | off | status | tick | start | stop",
     "dispatch-task",
     "task hold | abort",
+    "task-hold | task-abort | task-reassign",
     "mailbox post | read",
     "doctor",
   ].join(" | ");
@@ -87,6 +91,12 @@ export async function runCommandPlaneCli(argv: string[]): Promise<CommandPlaneCl
         return await handleDispatchTask(rest);
       case "task":
         return await handleTask(rest);
+      case "task-hold":
+        return await handleTask(["hold", ...rest]);
+      case "task-abort":
+        return await handleTask(["abort", ...rest]);
+      case "task-reassign":
+        return await handleTaskReassign(rest);
       case "mailbox":
         return await handleMailbox(rest);
       case "doctor":
@@ -111,6 +121,9 @@ function helpFor(command: string, rest: string[]): string {
     task: "superspec task hold|abort ...",
     "task hold": "superspec task hold --feature <id> --task <id> --hold true|false",
     "task abort": "superspec task abort --feature <id> --task <id> --confirm --reason <text>",
+    "task-hold": "superspec task-hold --feature <id> --task <id> --hold true|false [--cwd path]",
+    "task-abort": "superspec task-abort --feature <id> --task <id> --confirm true [--reason <text>] [--cwd path]",
+    "task-reassign": "superspec task-reassign --feature <id> --task <id> --agent <id> [--cwd path]",
     away: "superspec away on|off|status|tick|start|stop [--allow-absent-ci true|false]",
     "away on": "superspec away on [--interval-ms N] [--allow-absent-ci true|false]",
     doctor: "superspec doctor [--cwd path]",
@@ -450,14 +463,14 @@ async function handleDispatchTask(rest: string[]): Promise<CommandPlaneCliResult
 
 async function handleTask(rest: string[]): Promise<CommandPlaneCliResult> {
   const [sub, ...args] = rest;
+  const confirm = splitConfirmFlag(args);
   const { values } = parseArgs({
-    args,
+    args: confirm.args,
     options: {
       cwd: { type: "string" },
       feature: { type: "string" },
       task: { type: "string" },
       hold: { type: "string" },
-      confirm: { type: "boolean" },
       reason: { type: "string" },
     },
   });
@@ -483,12 +496,61 @@ async function handleTask(rest: string[]): Promise<CommandPlaneCliResult> {
       hiveRoot: ctx.hiveRoot,
       featureId: values.feature as string,
       taskId: values.task as string,
-      confirm: values.confirm === true,
+      confirm: confirm.confirm,
       abortReason: (values.reason as string | undefined) ?? "",
     });
     return envelope(result);
   }
   return envelopeFail("INVALID_INPUT", `unknown task subcommand: ${sub ?? "(none)"}`);
+}
+
+async function handleTaskReassign(rest: string[]): Promise<CommandPlaneCliResult> {
+  const { values } = parseArgs({
+    args: rest,
+    options: {
+      cwd: { type: "string" },
+      feature: { type: "string" },
+      task: { type: "string" },
+      agent: { type: "string" },
+    },
+  });
+  const ctx = await resolveCtx(values.cwd as string | undefined);
+  if (!ctx.ok) return envelope(ctx);
+  if (!values.feature || !values.task || !values.agent) {
+    return envelopeFail("INVALID_INPUT", "missing --feature, --task, or --agent");
+  }
+  const result = await taskReassign({
+    hiveRoot: ctx.hiveRoot,
+    featureId: values.feature as string,
+    taskId: values.task as string,
+    agentId: values.agent as string,
+  });
+  return envelope(result);
+}
+
+/** Accepts `--confirm`, `--confirm true`, and `--confirm false` before parseArgs. */
+function splitConfirmFlag(args: string[]): { args: string[]; confirm: boolean } {
+  const rest: string[] = [];
+  let confirm = false;
+  for (let index = 0; index < args.length; index += 1) {
+    const token = args[index];
+    if (token === "--confirm=true" || token === "--confirm=false") {
+      confirm = token === "--confirm=true";
+      continue;
+    }
+    if (token !== "--confirm") {
+      if (token !== undefined) rest.push(token);
+      continue;
+    }
+    const next = args[index + 1];
+    if (next === "true" || next === "false") {
+      confirm = next === "true";
+      index += 1;
+      continue;
+    }
+    confirm = true;
+  }
+  return { args: rest, confirm };
 }
 
 async function handleMailbox(rest: string[]): Promise<CommandPlaneCliResult> {
