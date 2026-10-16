@@ -162,7 +162,7 @@ describe("wrapped command-plane hooks", () => {
       },
     });
     const result = await safeEngineDispatch(intent(hiveRoot));
-    expect(result).toEqual({ accepted: false });
+    expect(result).toEqual({ accepted: false, reason: "HOOK_FAILED_CLOSED" });
     const event = await readHookFailed(hiveRoot);
     expect(event.data).toEqual({ hook: "dispatch", reason: "HOOK_FAILED_CLOSED" });
   });
@@ -262,7 +262,7 @@ describe("wrapped command-plane hooks", () => {
       },
     });
     const result = await safeEngineDispatch(intent(hiveRoot));
-    expect(result).toEqual({ accepted: false });
+    expect(result).toEqual({ accepted: false, reason: "HOOK_FAILED_CLOSED" });
     expect(await readFile(file, "utf8")).toBe("");
     await chmod(file, 0o644);
   });

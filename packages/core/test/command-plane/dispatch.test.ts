@@ -101,7 +101,18 @@ describe("sliceABeforeDispatch", () => {
     for (const engine of [null, "claude", "codex", "cursor-agent", "cursor"]) {
       expect(sliceABeforeDispatch(engine)).toEqual({ allow: true });
     }
-    for (const engine of ["byok", "local", "opencode", "crush", "aider", "custom"]) {
+    for (const engine of [
+      "byok",
+      "local",
+      "opencode",
+      "crush",
+      "aider",
+      "custom",
+      "agent",
+      "subscription",
+      "Claude",
+      "opencode ",
+    ]) {
       expect(sliceABeforeDispatch(engine)).toEqual({ allow: false, reason: "SLICE_A_ONLY" });
     }
   });
@@ -296,7 +307,7 @@ describe("dispatchTask", () => {
     },
   );
 
-  it.each(["byok", "local", "opencode", "crush", "aider", "custom"])(
+  it.each(["byok", "local", "opencode", "crush", "aider", "custom", "agent", "subscription"])(
     "denies supervisor rung %s with SLICE_A_ONLY and writes nothing",
     async (engine) => {
       const spend: string[] = [];
@@ -368,13 +379,32 @@ describe("dispatchTask", () => {
     expect(events.some((event) => event.type === "hook.failed")).toBe(true);
   });
 
+  it("treats an engine dispatch throw as HOOK_FAILED_CLOSED", async () => {
+    registerCommandPlaneHooks({
+      engine: {
+        dispatch: async () => {
+          throw new Error("dispatch blew up");
+        },
+      },
+    });
+    const repo = await readyRepo();
+    const result = await dispatchTask({ featureId: FEATURE, taskId: "T001", cwd: repo.root });
+    expect(result).toMatchObject({ ok: false, code: "HOOK_FAILED_CLOSED", began: false });
+    await expect(access(join(repo.hive, "dispatch-queue", FEATURE, "T001.json"))).rejects.toThrow();
+    expect(await loadState(repo.specDir)).toBeNull();
+    expect((await readLedger(repo.hive)).tasks.find((task) => task.id === "T001")?.status).toBe("todo");
+    const events = await readEvents(repo.hive);
+    expect(events.some((event) => event.type === "hook.failed")).toBe(true);
+    expect(hostSpawnCalls()).toEqual([]);
+  });
+
   it("does not begin-task when engine dispatch returns accepted false", async () => {
     registerCommandPlaneHooks({
       engine: { dispatch: async () => ({ accepted: false }) },
     });
     const repo = await readyRepo();
     const result = await dispatchTask({ featureId: FEATURE, taskId: "T001", cwd: repo.root });
-    expect(result).toMatchObject({ ok: false, accepted: false, began: false });
+    expect(result).toMatchObject({ ok: false, code: "ENGINE_REJECTED", accepted: false, began: false });
     await expect(access(join(repo.hive, "dispatch-queue", FEATURE, "T001.json"))).rejects.toThrow();
     expect(await loadState(repo.specDir)).toBeNull();
     expect((await readLedger(repo.hive)).tasks.find((task) => task.id === "T001")?.status).toBe("todo");

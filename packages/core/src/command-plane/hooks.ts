@@ -114,7 +114,9 @@ export interface EngineHooks {
   normalizeEvent?(raw: NormalizeEventInput): Promise<IraEvent | null>;
 }
 
-export type EngineDispatchResult = { accepted: boolean } | null;
+export type EngineDispatchResult =
+  | { accepted: boolean; reason?: typeof HOOK_FAILED_CLOSED }
+  | null;
 
 export type UntrustedImportResult = { askMeId: string } | { accepted: false } | null;
 
@@ -168,13 +170,13 @@ export async function safeBeforeDispatch(ctx: DispatchContext): Promise<SafeBefo
   );
 }
 
-/** Missing `dispatch` returns null (skipped). That null is not a host-engine decision. */
+/** Missing `dispatch` returns null (skipped). A throw denies with `HOOK_FAILED_CLOSED`. */
 export async function safeEngineDispatch(intent: DispatchIntent): Promise<EngineDispatchResult> {
   const hook = registry.engine.dispatch;
-  return failClosed(
+  return failClosed<EngineDispatchResult>(
     "dispatch",
     { hiveRoot: intent.hiveRoot, featureId: intent.featureId },
-    { accepted: false },
+    { accepted: false, reason: HOOK_FAILED_CLOSED },
     hook ? () => hook(intent) : undefined,
     null,
   );

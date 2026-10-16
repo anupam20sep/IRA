@@ -32,7 +32,6 @@ import { EVENT_LOCK_WAIT_MS, appendJsonlLine, withLock, writeJsonAtomic } from "
 import type { AskMeReasonClass, AutonomySettings, HiveLedger, HiveTask, RosterAgent } from "./types.js";
 
 const HOST_ENGINES = new Set(["claude", "codex", "cursor-agent"]);
-const SUPERVISOR_RUNGS = new Set(["byok", "local", "opencode", "crush", "aider", "custom"]);
 const GITIGNORE_LINE = ".superspec/hive/";
 const TASK_ID = /^[A-Za-z0-9][A-Za-z0-9._-]{0,80}$/;
 
@@ -87,16 +86,13 @@ export function rejectUnfreshSubagent(
 /**
  * Slice A token gate. Host engines (`claude`, `codex`, `cursor-agent`, alias `cursor`)
  * and a null engine (the attached host) are allowed. This function writes no spend.
- * A byok or local supervisor rung, including opencode, crush, aider, and custom, is denied.
+ * Every other id, including byok, local, and unknown strings, is denied before hooks.
  */
 export function sliceABeforeDispatch(
   engine: string | null,
 ): { allow: true } | { allow: false; reason: "SLICE_A_ONLY" } {
   if (isHostEngine(engine)) return { allow: true };
-  if (engine !== null && SUPERVISOR_RUNGS.has(engine)) {
-    return { allow: false, reason: "SLICE_A_ONLY" };
-  }
-  return { allow: true };
+  return { allow: false, reason: "SLICE_A_ONLY" };
 }
 
 export function isHostEngine(engine: string | null): boolean {
@@ -193,7 +189,10 @@ export async function dispatchTask(input: DispatchTaskInput): Promise<DispatchTa
   }
 
   const dispatched = await safeEngineDispatch(intent);
-  if (dispatched?.accepted === false) return stop("ENGINE_REJECTED", { accepted: false });
+  if (dispatched?.accepted === false) {
+    if (dispatched.reason === HOOK_FAILED_CLOSED) return stop("HOOK_FAILED_CLOSED");
+    return stop("ENGINE_REJECTED", { accepted: false });
+  }
   if (dispatched?.accepted === true) {
     const again = sliceABeforeDispatch(engine);
     if (!again.allow) return stop(again.reason, { accepted: false });
