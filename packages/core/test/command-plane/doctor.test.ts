@@ -201,14 +201,20 @@ describe("runDoctor", () => {
     expect(JSON.parse(await readFile(claim, "utf8")).validated).toBe(true);
   });
 
-  it("reports MCP_TOOL_MISSING from buildToolDefinitions and stays not slice-validated", async () => {
+  it("includes command-plane MCP tools from buildToolDefinitions by default", async () => {
+    const { root } = await repo("main");
+    const report = await runDoctor({ cwd: root });
+    expect(report.mcpTools).toEqual(expect.arrayContaining([...TOOLS]));
+    expect(report.findings.some((item) => item.code === "MCP_TOOL_MISSING")).toBe(false);
+  });
+
+  it("reports MCP_TOOL_MISSING when required tools are omitted from mcpToolNames", async () => {
     const { root, hive } = await repo("main");
     await writeFile(
       join(hive, "slice-a.json"),
       `${JSON.stringify({ validated: true, sliceAValidated: true })}\n`,
     );
-    const report = await runDoctor({ cwd: root });
-    expect(report.mcpTools).not.toEqual(expect.arrayContaining([...TOOLS]));
+    const report = await runDoctor({ cwd: root, mcpToolNames: ["build-matrix"] });
     expect(report.findings).toContainEqual(expect.objectContaining({ code: "MCP_TOOL_MISSING", severity: "error" }));
     expect(report.hiveReady).toBe(false);
     expect(report.ready).toBe(report.hiveReady);

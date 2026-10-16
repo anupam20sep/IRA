@@ -41,6 +41,7 @@ import {
   writeCoordinatorBrief,
 } from "./coordinator-ledger.js";
 import { isDirectRun } from "./cli-entry.js";
+import { buildCommandPlaneMcpTools } from "./command-plane/mcp-command-plane-tools.js";
 
 interface ToolContent {
   content: { type: "text"; text: string }[];
@@ -461,6 +462,7 @@ export function buildToolDefinitions(): ToolDef[] {
           }),
         ),
     },
+    ...(buildCommandPlaneMcpTools() as ToolDef[]),
   ];
 }
 

@@ -10,20 +10,40 @@ describe("MCP tool definitions", () => {
     const names = buildToolDefinitions().map((t) => t.name).sort();
     expect(names).toEqual(
       [
+        "ask-me-answer",
+        "ask-me-list",
+        "ask-me-show",
+        "autonomy-set",
+        "autonomy-show",
+        "away-set",
+        "away-tick",
         "begin-task",
+        "brief-show",
+        "brief-submit",
         "build-matrix",
         "coordinator-brief",
+        "dispatch-task",
+        "doctor",
         "forge-status",
+        "hive-ci-set",
+        "hive-init",
+        "hive-status",
+        "hive-sync",
         "init",
         "lint-design",
         "lint-plan",
         "lint-spec",
         "list-personas",
+        "mailbox-post",
+        "mailbox-read",
         "next-task",
         "record-result",
+        "roster-list",
         "route-model",
         "scaffold",
         "sync-status",
+        "task-abort",
+        "task-hold",
       ].sort(),
     );
   });
@@ -207,5 +227,49 @@ describe("list-personas MCP tool", () => {
     const tool = buildToolDefinitions().find((t) => t.name === "list-personas")!;
     const res = await tool.handler({ includeDefaults: false });
     expect(JSON.parse(res.content[0].text)).toEqual([]);
+  });
+});
+
+describe("mcp command-plane tools", () => {
+  it("registers dispatch-task, task-hold, task-abort, doctor, and hive-init", () => {
+    const names = buildToolDefinitions().map((t) => t.name);
+    for (const name of ["dispatch-task", "task-hold", "task-abort", "doctor", "hive-init"] as const) {
+      expect(names).toContain(name);
+    }
+  });
+
+  it("dispatch-task schema matches design request fields", () => {
+    const tool = buildToolDefinitions().find((t) => t.name === "dispatch-task")!;
+    const schema = z.object(tool.schema);
+    expect(() =>
+      schema.parse({
+        featureId: "001-demo",
+        taskId: "T001",
+        cwd: "/tmp/proj",
+      }),
+    ).not.toThrow();
+  });
+
+  it("task-hold and task-abort schemas match design", () => {
+    const hold = buildToolDefinitions().find((t) => t.name === "task-hold")!;
+    const abort = buildToolDefinitions().find((t) => t.name === "task-abort")!;
+    expect(() =>
+      z.object(hold.schema).parse({ featureId: "001-demo", taskId: "T001", hold: true }),
+    ).not.toThrow();
+    expect(() =>
+      z
+        .object(abort.schema)
+        .parse({ featureId: "001-demo", taskId: "T001", confirm: true, abortReason: "stop" }),
+    ).not.toThrow();
+  });
+
+  it("build-matrix still works when hive is absent (forge tools preserved)", async () => {
+    const tool = buildToolDefinitions().find((t) => t.name === "build-matrix")!;
+    const res = await tool.handler({
+      specText: "- **FR-001**: a",
+      planText: "### Task T001: x\n**Implements:** FR-001",
+    });
+    const payload = JSON.parse(res.content[0].text);
+    expect(payload.gaps).toEqual([]);
   });
 });
