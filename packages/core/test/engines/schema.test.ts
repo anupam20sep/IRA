@@ -8,7 +8,7 @@ import {
   CustomEnginesFileSchema,
   LocalPackProfileSchema,
   CredentialMatrixRowSchema,
-  EngineHealthRecordSchema,
+  EngineHealthSchema,
 } from "../../src/engines/schema.js";
 
 describe("FailoverPolicySchema", () => {
@@ -82,6 +82,25 @@ describe("CustomEngineSchema", () => {
     });
     expect(row.eventMode).toBe("sparse");
   });
+
+  it("rejects command argv with empty strings", () => {
+    expect(() =>
+      CustomEngineSchema.parse({
+        instanceId: "my-cli",
+        displayName: "My CLI",
+        command: [""],
+        eventMode: "sparse",
+      }),
+    ).toThrow();
+    expect(() =>
+      CustomEngineSchema.parse({
+        instanceId: "my-cli",
+        displayName: "My CLI",
+        command: ["aider", ""],
+        eventMode: "sparse",
+      }),
+    ).toThrow();
+  });
 });
 
 describe("CustomEnginesFileSchema", () => {
@@ -123,9 +142,9 @@ describe("CredentialMatrixRowSchema", () => {
   });
 });
 
-describe("EngineHealthRecordSchema", () => {
+describe("EngineHealthSchema", () => {
   it("parses health cache row", () => {
-    const row = EngineHealthRecordSchema.parse({
+    const row = EngineHealthSchema.parse({
       engineId: "codex",
       authMode: "byok",
       health: "degraded",

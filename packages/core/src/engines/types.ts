@@ -86,7 +86,7 @@ export interface CredentialMatrixRow {
   binary: string | null;
 }
 
-export interface EngineHealthRecord {
+export interface EngineHealth {
   engineId: string;
   authMode: AuthMode;
   health: EngineHealthStatus;
@@ -94,6 +94,3 @@ export interface EngineHealthRecord {
   binaryVersion: string | null;
   checkedAt: string;
 }
-
-/** @deprecated Use {@link EngineHealthStatus} for the health enum. */
-export type EngineHealth = EngineHealthStatus;

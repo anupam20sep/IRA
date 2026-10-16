@@ -9,7 +9,6 @@ export {
   type CustomEngine,
   type CustomEnginesFile,
   type EngineHealth,
-  type EngineHealthRecord,
   type EngineHealthStatus,
   type EngineId,
   type EnginePreset,
@@ -148,7 +147,7 @@ export const CredentialMatrixRowSchema = z.object({
   binary: z.string().min(1).nullable(),
 });
 
-export const EngineHealthRecordSchema = z.object({
+export const EngineHealthSchema = z.object({
   engineId: z.string().min(1),
   authMode: AuthModeSchema,
   health: EngineHealthStatusSchema,
