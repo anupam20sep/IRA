@@ -28,6 +28,7 @@ import {
   readMaxReviewFailures,
   resolveHiveAnchor,
 } from "./command-plane/dispatch-guard.js";
+import { maybeReplanAfterRecordResult } from "./command-plane/replan.js";
 import { initProject } from "./init.js";
 import { syncStatusFromFiles } from "./fr-status.js";
 import {
@@ -397,9 +398,8 @@ async function runCliInner(argv: string[], options?: RunCliOptions): Promise<Cli
       const anchor = resolveHiveAnchor(specDir);
       const state = reconcileState(tasks, await loadState(specDir));
       const passed = values.passed === "true";
-      recordResult(state, values.task as string, passed, {
-        maxReviewFailures: await readMaxReviewFailures(anchor),
-      });
+      const maxReviewFailures = await readMaxReviewFailures(anchor);
+      recordResult(state, values.task as string, passed, { maxReviewFailures });
       await saveState(specDir, state);
       let statusPath: string | undefined;
       if (values.spec !== undefined) {
@@ -432,6 +432,19 @@ async function runCliInner(argv: string[], options?: RunCliOptions): Promise<Cli
         values.verbose === true,
       );
       await maybeSyncHive(hiveSyncTarget(anchor, specDir, values.plan as string));
+      const recorded = state.tasks[values.task as string];
+      if (recorded) {
+        await maybeReplanAfterRecordResult({
+          hiveExists: anchor.hiveExists,
+          hiveRoot: anchor.hiveExists ? anchor.hiveRoot : undefined,
+          featureId: anchor.hiveExists ? anchor.featureId : undefined,
+          taskId: values.task as string,
+          passed,
+          forgeStatus: recorded.status,
+          reviewFailures: recorded.reviewFailures,
+          ceiling: maxReviewFailures,
+        });
+      }
       return { code: 0, stdout };
     } catch (err) {
       return { code: 0, stdout: formatCommandError("record-result", err) };

@@ -21,6 +21,7 @@ import {
   readMaxReviewFailures,
   resolveHiveAnchor,
 } from "./command-plane/dispatch-guard.js";
+import { maybeReplanAfterRecordResult } from "./command-plane/replan.js";
 import { discoverPersonas } from "./persona-discovery.js";
 import { initProject, formatInitReport, formatInitError } from "./init.js";
 import { buildStatusSnapshot, writeStatusFile } from "./fr-status.js";
@@ -328,9 +329,8 @@ export function buildToolDefinitions(): ToolDef[] {
           const state = reconcileState(tasks, await loadState(stateDir));
           const taskId = args.taskId as string;
           const passed = args.passed as boolean;
-          recordResult(state, taskId, passed, {
-            maxReviewFailures: await readMaxReviewFailures(anchor),
-          });
+          const maxReviewFailures = await readMaxReviewFailures(anchor);
+          recordResult(state, taskId, passed, { maxReviewFailures });
           await saveState(stateDir, state);
           let statusPath: string | undefined;
           const specText = args.specText as string | undefined;
@@ -368,6 +368,19 @@ export function buildToolDefinitions(): ToolDef[] {
           const planPath = args.planPath as string | undefined;
           if (typeof planPath === "string") {
             await maybeSyncHive(hiveSyncTarget(anchor, stateDir, planPath));
+          }
+          const recorded = state.tasks[taskId];
+          if (recorded) {
+            await maybeReplanAfterRecordResult({
+              hiveExists: anchor.hiveExists,
+              hiveRoot: anchor.hiveExists ? anchor.hiveRoot : undefined,
+              featureId: anchor.hiveExists ? anchor.featureId : undefined,
+              taskId,
+              passed,
+              forgeStatus: recorded.status,
+              reviewFailures: recorded.reviewFailures,
+              ceiling: maxReviewFailures,
+            });
           }
           return { content: [{ type: "text", text }] };
         } catch (err) {
