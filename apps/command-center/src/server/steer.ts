@@ -38,6 +38,8 @@ export type SteerDispatchInput = SteerBaseInput & {
 
 export type SteerAbortInput = SteerBaseInput & {
   confirm: boolean;
+  /** Plane `task-abort` rejects an empty reason. Omitted keeps the argv without `--reason`. */
+  reason?: string;
 };
 
 export type SteerReassignInput = SteerBaseInput & {
@@ -56,11 +58,11 @@ export function steerArgvPause(input: SteerArgvTarget): string[] {
   );
 }
 
-export function steerArgvAbort(input: SteerArgvTarget): string[] {
-  return withCwd(
-    ["task-abort", "--feature", input.featureId, "--task", input.taskId, "--confirm", "true"],
-    input.cwd,
-  );
+export function steerArgvAbort(input: SteerArgvTarget & { reason?: string }): string[] {
+  const argv = ["task-abort", "--feature", input.featureId, "--task", input.taskId, "--confirm", "true"];
+  const reason = input.reason?.trim() ?? "";
+  if (reason.length > 0) argv.push("--reason", reason);
+  return withCwd(argv, input.cwd);
 }
 
 export function steerArgvReassign(input: SteerArgvTarget & { agentId: string }): string[] {
@@ -96,7 +98,13 @@ export function steerAbort(input: SteerAbortInput): Promise<SteerHandlerResult> 
   return execute(
     input,
     () => canAbort({ status: input.task.status, confirm: input.confirm }),
-    () => steerArgvAbort({ featureId: input.featureId, taskId: input.taskId, cwd: input.cwd }),
+    () =>
+      steerArgvAbort({
+        featureId: input.featureId,
+        taskId: input.taskId,
+        cwd: input.cwd,
+        reason: input.reason,
+      }),
   );
 }
 
