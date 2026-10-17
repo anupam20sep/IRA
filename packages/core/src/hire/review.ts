@@ -10,6 +10,7 @@ import {
   withLock,
   writeJsonAtomic,
 } from "../command-plane/store.js";
+import { HireAskMeError, openUntrustedImportAskMe } from "./ask-me-bridge.js";
 import { HIRE_TRUST_BANNER } from "./constants.js";
 import { HireReviewSchema } from "./schema.js";
 import {
@@ -150,7 +151,7 @@ export async function createPendingReview(input: CreatePendingReviewInput): Prom
     sourceKind: review.sourceKind,
     contentSha256: review.contentSha256,
   });
-  return review;
+  return linkOpenedReview(input.hiveRoot, review);
 }
 
 export async function loadReview(hiveRoot: string, reviewId: string): Promise<HireReview | null> {
@@ -178,6 +179,21 @@ export async function updateReview(
 
   await appendHireEvent(hiveRoot, "hire.review_updated", { reviewId: locked.value.reviewId });
   return locked.value;
+}
+
+/** Link the review to Ask-Me. A directory without `hive.json` keeps the pending id. */
+async function linkOpenedReview(hiveRoot: string, review: HireReview): Promise<HireReview> {
+  try {
+    await openUntrustedImportAskMe({
+      hiveRoot,
+      reviewId: review.reviewId,
+      sourceSummary: review.sourceRef,
+    });
+  } catch (err) {
+    if (err instanceof HireAskMeError && err.code === "HIVE_NOT_INITIALIZED") return review;
+    throw err;
+  }
+  return (await loadReview(hiveRoot, review.reviewId)) ?? review;
 }
 
 function applyPatch(current: HireReview, patch: HireReviewPatch): HireReview {
