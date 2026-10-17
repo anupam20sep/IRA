@@ -58,6 +58,10 @@ import {
   isCommandPlaneCommand,
   runCommandPlaneCli,
 } from "./command-plane/cli-handlers.js";
+import { priorPatternsForTask, routeModelWithLearning, scheduleRecordResultLearning } from "./learning-memory/forge-wiring.js";
+import type { Complexity, TaskKind } from "./types.js";
+import type { HarnessId } from "./harness-model-map.js";
+import type { RouteRole } from "./model-router.js";
 
 export interface CliResult {
   code: number;
@@ -301,11 +305,19 @@ async function runCliInner(argv: string[], options?: RunCliOptions): Promise<Cli
         return { code: 1, stdout: formatDispatchPathRequired() };
       }
       const state = reconcileState(tasks, await loadState(specDir));
-      markInProgress(state, values.task as string);
+      const taskId = values.task as string;
+      markInProgress(state, taskId);
       await saveState(specDir, state);
+      const task = tasks.find((entry) => entry.id === taskId);
+      const prior = task ? await priorPatternsForTask({ specDir, task }) : null;
       const stdout = formatBeginTaskReport(
-        values.task as string,
-        { dir: specDir, cwd: process.cwd() },
+        taskId,
+        {
+          dir: specDir,
+          cwd: process.cwd(),
+          priorPatternsText: prior?.text ?? null,
+          patternIds: prior?.patternIds,
+        },
         values.verbose === true,
       );
       await maybeSyncHive(hiveSyncTarget(anchor, specDir, values.plan as string));
@@ -472,20 +484,15 @@ async function runCliInner(argv: string[], options?: RunCliOptions): Promise<Cli
           },
         });
       }
-      const stdout = formatRecordResultReport(
-        values.task as string,
-        passed,
-        { dir: specDir, statusPath, coordinatorPath, cwd: process.cwd() },
-        values.verbose === true,
-      );
       await maybeSyncHive(hiveSyncTarget(anchor, specDir, values.plan as string));
-      const recorded = state.tasks[values.task as string];
+      const taskId = values.task as string;
+      const recorded = state.tasks[taskId];
       if (recorded) {
         await maybeReplanAfterRecordResult({
           hiveExists: anchor.hiveExists,
           hiveRoot: anchor.hiveExists ? anchor.hiveRoot : undefined,
           featureId: anchor.hiveExists ? anchor.featureId : undefined,
-          taskId: values.task as string,
+          taskId,
           passed,
           forgeStatus: recorded.status,
           reviewFailures: recorded.reviewFailures,
@@ -498,10 +505,32 @@ async function runCliInner(argv: string[], options?: RunCliOptions): Promise<Cli
           hiveRoot: anchor.hiveExists ? anchor.hiveRoot : undefined,
           featureId: anchor.hiveExists ? anchor.featureId : undefined,
           cwd: anchor.hiveExists ? anchor.repositoryRoot : undefined,
-          completedTaskId: values.task as string,
+          completedTaskId: taskId,
           passed: true,
         });
       }
+      const task = tasks.find((entry) => entry.id === taskId);
+      const patternsScheduled = scheduleRecordResultLearning({
+        specDir,
+        task,
+        taskId,
+        passed,
+        reviewFailures: recorded?.reviewFailures ?? 0,
+        implementerReport: values["implementer-report"] as string | undefined,
+        reviewerReport: values["reviewer-report"] as string | undefined,
+      });
+      const stdout = formatRecordResultReport(
+        taskId,
+        passed,
+        {
+          dir: specDir,
+          statusPath,
+          coordinatorPath,
+          cwd: process.cwd(),
+          patternsScheduled,
+        },
+        values.verbose === true,
+      );
       return { code: 0, stdout };
     } catch (err) {
       return { code: 0, stdout: formatCommandError("record-result", err) };
@@ -578,10 +607,123 @@ async function runCliInner(argv: string[], options?: RunCliOptions): Promise<Cli
     }
   }
 
+  if (command === "route-model") {
+    return runRouteModelCli(rest);
+  }
+
   return {
     code: 0,
-    stdout: `Unknown command: ${command ?? "(none)"}. Try: init | matrix | lint | scaffold | list-personas | coordinator-init | coordinator-brief | next-task | begin-task | record-result | sync-status | forge-status | ${commandPlaneHelpSummary()} | mcp`,
+    stdout: `Unknown command: ${command ?? "(none)"}. Try: init | matrix | lint | scaffold | list-personas | coordinator-init | coordinator-brief | next-task | begin-task | record-result | route-model | sync-status | forge-status | ${commandPlaneHelpSummary()} | mcp`,
   };
+}
+
+async function runRouteModelCli(rest: string[]): Promise<CliResult> {
+  const { values } = parseArgs({
+    args: rest,
+    options: {
+      complexity: { type: "string" },
+      role: { type: "string" },
+      attempt: { type: "string" },
+      kind: { type: "string" },
+      harness: { type: "string" },
+      "project-root": { type: "string" },
+      task: { type: "string" },
+      plan: { type: "string" },
+      feature: { type: "string" },
+      implements: { type: "string" },
+    },
+  });
+  if (values.complexity === undefined) {
+    return {
+      code: 0,
+      stdout: formatCommandError("route-model", new Error("missing required argument --complexity")),
+    };
+  }
+  const complexity = values.complexity as string;
+  if (!isComplexity(complexity)) {
+    return {
+      code: 0,
+      stdout: formatCommandError("route-model", new Error("--complexity must be mechanical, moderate, or complex")),
+    };
+  }
+  let role: RouteRole | undefined;
+  if (values.role !== undefined) {
+    if (!isRouteRole(values.role)) {
+      return {
+        code: 0,
+        stdout: formatCommandError("route-model", new Error("--role must be implementer or reviewer")),
+      };
+    }
+    role = values.role;
+  }
+  let kind: TaskKind | undefined;
+  if (values.kind !== undefined) {
+    if (!isTaskKind(values.kind)) {
+      return {
+        code: 0,
+        stdout: formatCommandError("route-model", new Error("--kind must be code, verify, provision, signoff, or doc-sync")),
+      };
+    }
+    kind = values.kind;
+  }
+  let harness: HarnessId | undefined;
+  if (values.harness !== undefined) {
+    if (!isHarness(values.harness)) {
+      return {
+        code: 0,
+        stdout: formatCommandError("route-model", new Error("--harness must be cursor, claude, or codex")),
+      };
+    }
+    harness = values.harness;
+  }
+  let attempt: number | undefined;
+  if (values.attempt !== undefined) {
+    attempt = Number(values.attempt);
+    if (!Number.isInteger(attempt) || attempt < 1) {
+      return {
+        code: 0,
+        stdout: formatCommandError("route-model", new Error("--attempt must be an integer >= 1")),
+      };
+    }
+  }
+  try {
+    const planText = values.plan ? await readFile(values.plan as string, "utf8") : undefined;
+    const implementsFr = (values.implements as string | undefined)
+      ?.split(",")
+      .map((tag) => tag.trim())
+      .filter((tag) => tag.length > 0);
+    const payload = await routeModelWithLearning({
+      complexity,
+      role,
+      attempt,
+      kind,
+      harness,
+      projectRoot: values["project-root"] as string | undefined,
+      taskId: values.task as string | undefined,
+      planText,
+      implementsFr,
+      featureId: values.feature as string | undefined,
+    });
+    return { code: 0, stdout: JSON.stringify(payload, null, 2) };
+  } catch (err) {
+    return { code: 0, stdout: formatCommandError("route-model", err) };
+  }
+}
+
+function isComplexity(value: string): value is Complexity {
+  return value === "mechanical" || value === "moderate" || value === "complex";
+}
+
+function isRouteRole(value: string): value is RouteRole {
+  return value === "implementer" || value === "reviewer";
+}
+
+function isTaskKind(value: string): value is TaskKind {
+  return value === "code" || value === "verify" || value === "provision" || value === "signoff" || value === "doc-sync";
+}
+
+function isHarness(value: string): value is HarnessId {
+  return value === "cursor" || value === "claude" || value === "codex";
 }
 
 export async function runCliMain(argv: string[]): Promise<number> {

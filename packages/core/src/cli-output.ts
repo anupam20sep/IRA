@@ -67,16 +67,35 @@ export function formatNextTaskReport(
 
 export function formatBeginTaskReport(
   taskId: string,
-  extra?: { dir?: string; cwd?: string },
+  extra?: {
+    dir?: string;
+    cwd?: string;
+    priorPatternsText?: string | null;
+    patternIds?: string[];
+  },
   verbose = false,
 ): string {
-  const payload = { ok: true, taskId, ...extra };
+  const patternIds = extra?.patternIds ?? [];
+  const payload: Record<string, unknown> = { ok: true, taskId };
+  if (extra?.dir) payload.dir = extra.dir;
+  if (extra?.cwd) payload.cwd = extra.cwd;
+  if (patternIds.length > 0) {
+    payload.patternCount = patternIds.length;
+    payload.patternIds = patternIds;
+  }
   if (!verbose) return JSON.stringify(payload, null, 2);
   const head = `SuperSpec begin-task: ${taskId} marked in progress`;
   const meta: string[] = [];
   if (extra?.dir) meta.push(`dir: ${extra.dir}`);
   if (extra?.cwd) meta.push(`cwd: ${extra.cwd}`);
-  return [head, ...meta.map((m) => `  ${m}`), "", JSON.stringify(payload, null, 2)].join("\n");
+  if (patternIds.length > 0) meta.push(`patterns: ${patternIds.length}`);
+  const lines = [head, ...meta.map((m) => `  ${m}`)];
+  const prior = extra?.priorPatternsText?.trim();
+  if (prior) {
+    lines.push("", "## Prior patterns (learning memory)", "", prior);
+  }
+  lines.push("", JSON.stringify(payload, null, 2));
+  return lines.join("\n");
 }
 
 export function formatCoordinatorBriefReport(
@@ -93,10 +112,20 @@ export function formatCoordinatorBriefReport(
 export function formatRecordResultReport(
   taskId: string,
   passed: boolean,
-  extra?: { dir?: string; statusPath?: string; coordinatorPath?: string; cwd?: string },
+  extra?: {
+    dir?: string;
+    statusPath?: string;
+    coordinatorPath?: string;
+    cwd?: string;
+    patternsScheduled?: boolean;
+  },
   verbose = false,
 ): string {
-  const payload = { ok: true, taskId, passed, ...extra };
+  const payload: Record<string, unknown> = { ok: true, taskId, passed };
+  if (extra?.dir) payload.dir = extra.dir;
+  if (extra?.statusPath) payload.statusPath = extra.statusPath;
+  if (extra?.coordinatorPath) payload.coordinatorPath = extra.coordinatorPath;
+  if (extra?.cwd) payload.cwd = extra.cwd;
   if (!verbose) return JSON.stringify(payload, null, 2);
   const verdict = passed ? "passed" : "failed";
   const head = `SuperSpec record-result: ${taskId} ${verdict}`;
@@ -105,6 +134,7 @@ export function formatRecordResultReport(
   if (extra?.statusPath) meta.push(`status.md: ${extra.statusPath}`);
   if (extra?.coordinatorPath) meta.push(`coordinator.md: ${extra.coordinatorPath}`);
   if (extra?.cwd) meta.push(`cwd: ${extra.cwd}`);
+  if (extra?.patternsScheduled) meta.push("patterns: distill scheduled");
   return [head, ...meta.map((m) => `  ${m}`), "", JSON.stringify(payload, null, 2)].join("\n");
 }
 

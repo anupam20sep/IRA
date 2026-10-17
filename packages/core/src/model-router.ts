@@ -24,6 +24,10 @@ export interface RouteModelResult {
   model: ModelClass;
   meaning: string;
   rule: string;
+  /** Single-line JUDGE hint. Omitted when route-model has no task context or no match. */
+  patternHint?: string;
+  /** Ids included in `patternHint`. Omitted together with `patternHint`. */
+  patternIds?: string[];
 }
 
 const MEANING =
@@ -112,4 +116,20 @@ export function routeModel(input: RouteModelInput | Pick<{ complexity: Complexit
 /** @deprecated Use routeModel(...).tier; kept for call sites that expect ModelClass. */
 export function routeModelClass(task: Pick<{ complexity: Complexity }, "complexity">): ModelClass {
   return routeModel(task).model;
+}
+
+/**
+ * Attach a JUDGE hint without changing tier selection.
+ * A null hint leaves the route object unchanged so existing consumers see no new keys.
+ */
+export function applyPatternHint(
+  routed: RouteModelResult,
+  hint: { patternHint: string; patternIds: string[] } | null,
+): RouteModelResult {
+  if (!hint || hint.patternIds.length === 0 || hint.patternHint.trim().length === 0) return routed;
+  return {
+    ...routed,
+    patternHint: hint.patternHint,
+    patternIds: hint.patternIds,
+  };
 }

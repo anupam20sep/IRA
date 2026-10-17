@@ -2,6 +2,7 @@ import { mkdir, readFile, writeFile, access } from "node:fs/promises";
 import { join } from "node:path";
 import { parsePlan } from "./plan-parser.js";
 import { forgeStatus, initState, loadState, nextTask } from "./forge-loop.js";
+import { priorPatternsForTask } from "./learning-memory/forge-wiring.js";
 
 export const COORDINATOR_BRIEF = "coordinator.md";
 export const REPORTS_DIR = "reports";
@@ -135,6 +136,10 @@ export async function buildCoordinatorBrief(input: BuildCoordinatorBriefInput): 
   const logLimit = input.logLimit ?? DEFAULT_LOG_LIMIT;
   const log = previousLog.slice(0, logLimit);
   const nextLabel = next ? `${next.id} — ${next.title}` : status.complete ? "(none — complete)" : "(none — blocked or waiting)";
+  const prior = next ? await priorPatternsForTask({ specDir: input.specDir, task: next }) : null;
+  const priorSection = prior?.text.trim()
+    ? `\n### Prior patterns for next task\n\n${prior.text.trim()}\n`
+    : "";
 
   return `# Forge Coordinator Brief (lean loop)
 
@@ -158,7 +163,7 @@ export async function buildCoordinatorBrief(input: BuildCoordinatorBriefInput): 
 
 - **Progress:** ${status.done}/${status.total} done · ${status.blocked} blocked · ${status.inProgress} in progress · complete=${status.complete}
 - **Next task:** ${nextLabel}
-${status.nextStep ? `- **Note:** ${status.nextStep}` : ""}
+${status.nextStep ? `- **Note:** ${status.nextStep}` : ""}${priorSection}
 
 ## Coordinator reply template
 

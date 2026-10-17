@@ -8,9 +8,16 @@ import { buildMatrix, matrixGaps } from "./matrix.js";
 import { lintPlan } from "./plan-lint.js";
 import { lintDesign, lintDesignText } from "./design-lint.js";
 import { lintSpec } from "./spec-lint.js";
-import { routeModel } from "./model-router.js";
+import { resolveRepositoryRoot } from "./command-plane/paths.js";
+import { installLearningMemory } from "./learning-memory/install.js";
+import {
+  priorPatternsForTask,
+  routeModelWithLearning,
+  scheduleRecordResultLearning,
+} from "./learning-memory/forge-wiring.js";
+import type { Complexity, TaskKind } from "./types.js";
+import type { RouteRole } from "./model-router.js";
 import { type HarnessId } from "./harness-model-map.js";
-import { resolveDispatchModel } from "./models-config.js";
 import { scaffold } from "./scaffold.js";
 import { initState, forgeStatus, nextTask, recordResult, loadState, saveState, markInProgress, reconcileState } from "./forge-loop.js";
 import {
@@ -104,32 +111,25 @@ export function buildToolDefinitions(): ToolDef[] {
         kind: z.enum(["code", "verify", "provision", "signoff", "doc-sync"]).optional(),
         harness: z.enum(["cursor", "claude", "codex"]).optional(),
         projectRoot: z.string().optional(),
+        taskId: z.string().optional(),
+        planText: z.string().optional(),
+        implementsFr: z.array(z.string()).optional(),
+        featureId: z.string().optional(),
       },
       handler: async (args) => {
-        const routed = routeModel({
-          complexity: args.complexity as "mechanical" | "moderate" | "complex",
-          role: args.role as "implementer" | "reviewer" | undefined,
+        const payload = await routeModelWithLearning({
+          complexity: args.complexity as Complexity,
+          role: args.role as RouteRole | undefined,
           attempt: args.attempt as number | undefined,
-          kind: args.kind as "code" | "verify" | "provision" | "signoff" | "doc-sync" | undefined,
-        });
-        const harness = (args.harness as HarnessId | undefined) ?? undefined;
-        const resolved = await resolveDispatchModel({
-          tier: routed.tier,
-          role: routed.role,
-          kind: args.kind as "code" | "verify" | "provision" | "signoff" | "doc-sync" | undefined,
-          attempt: routed.attempt,
-          harness,
+          kind: args.kind as TaskKind | undefined,
+          harness: args.harness as HarnessId | undefined,
           projectRoot: args.projectRoot as string | undefined,
+          taskId: args.taskId as string | undefined,
+          planText: args.planText as string | undefined,
+          implementsFr: args.implementsFr as string[] | undefined,
+          featureId: args.featureId as string | undefined,
         });
-        return json({
-          ...routed,
-          harness: resolved.harness,
-          slug: resolved.slug,
-          thinkingHint: resolved.thinkingHint,
-          examples: resolved.examples,
-          source: resolved.source,
-          configPath: resolved.configPath,
-        });
+        return json(payload);
       },
     },
     {
@@ -270,8 +270,19 @@ export function buildToolDefinitions(): ToolDef[] {
           const taskId = args.taskId as string;
           markInProgress(state, taskId);
           await saveState(stateDir, state);
+          const task = tasks.find((entry) => entry.id === taskId);
+          const prior = task ? await priorPatternsForTask({ specDir: stateDir, task }) : null;
           const verbose = (args.verbose as boolean | undefined) ?? true;
-          const text = formatBeginTaskReport(taskId, { dir: stateDir, cwd: process.cwd() }, verbose);
+          const text = formatBeginTaskReport(
+            taskId,
+            {
+              dir: stateDir,
+              cwd: process.cwd(),
+              priorPatternsText: prior?.text ?? null,
+              patternIds: prior?.patternIds,
+            },
+            verbose,
+          );
           const planPath = args.planPath as string | undefined;
           if (typeof planPath === "string") {
             await maybeSyncHive(hiveSyncTarget(anchor, stateDir, planPath));
@@ -361,13 +372,6 @@ export function buildToolDefinitions(): ToolDef[] {
               },
             });
           }
-          const verbose = (args.verbose as boolean | undefined) ?? true;
-          const text = formatRecordResultReport(
-            taskId,
-            passed,
-            { dir: stateDir, statusPath, coordinatorPath, cwd: process.cwd() },
-            verbose,
-          );
           const planPath = args.planPath as string | undefined;
           if (typeof planPath === "string") {
             await maybeSyncHive(hiveSyncTarget(anchor, stateDir, planPath));
@@ -395,6 +399,23 @@ export function buildToolDefinitions(): ToolDef[] {
               passed: true,
             });
           }
+          const task = tasks.find((entry) => entry.id === taskId);
+          const patternsScheduled = scheduleRecordResultLearning({
+            specDir: stateDir,
+            task,
+            taskId,
+            passed,
+            reviewFailures: recorded?.reviewFailures ?? 0,
+            implementerReport: args.implementerReport as string | undefined,
+            reviewerReport: args.reviewerReport as string | undefined,
+          });
+          const verbose = (args.verbose as boolean | undefined) ?? true;
+          const text = formatRecordResultReport(
+            taskId,
+            passed,
+            { dir: stateDir, statusPath, coordinatorPath, cwd: process.cwd(), patternsScheduled },
+            verbose,
+          );
           return { content: [{ type: "text", text }] };
         } catch (err) {
           return { content: [{ type: "text", text: formatCommandError("record-result", err) }] };
@@ -485,6 +506,8 @@ export function createServer(): McpServer {
 
 export async function runMcpServer(): Promise<void> {
   bootstrapEngineHooksFromCwd();
+  const resolved = resolveRepositoryRoot(process.cwd());
+  if (resolved.ok) installLearningMemory({ projectRoot: resolved.repositoryRoot });
   const server = createServer();
   const transport = new StdioServerTransport();
   await server.connect(transport);
