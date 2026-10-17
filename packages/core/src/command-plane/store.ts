@@ -51,6 +51,7 @@ export function busyCodeForLock(lockPath: string): LockBusyCode {
   if (base === "events.lock") return EVENT_BUSY;
   if (base === "roster.lock") return ROSTER_BUSY;
   if (/^ledger-.+\.lock$/.test(base)) return LEDGER_BUSY;
+  if (base === "spend.lock" || base === "breakers.lock") return LEDGER_BUSY;
   if (/^mailbox-.+-outbox\.lock$/.test(base)) return MAILBOX_BUSY;
   throw new Error(`unknown hive lock path: ${base}`);
 }

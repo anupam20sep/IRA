@@ -1,4 +1,5 @@
 import { readSliceAValidated } from "../engines/dispatch.js";
+import { resolveRepositoryRoot } from "../command-plane/paths.js";
 
 /** Slice A denial shape used by token governor before full DispatchGate mapping (OD-020). */
 export type SliceADispatchGate =
@@ -17,6 +18,8 @@ export type SliceAGuardOptions = {
 
 /** True while doctor has not yet reported sliceAValidated for this hive. */
 export async function isSliceAActive(hiveRoot: string): Promise<boolean> {
+  const resolved = resolveRepositoryRoot(hiveRoot);
+  if (!resolved.ok) return false;
   return !(await readSliceAValidated(hiveRoot));
 }
 
