@@ -43,6 +43,8 @@ describe("MCP tool definitions", () => {
         "hive-status",
         "hive-sync",
         "init",
+        "integrations-share-create",
+        "integrations-status",
         "lint-design",
         "lint-plan",
         "lint-spec",
