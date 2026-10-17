@@ -1,10 +1,16 @@
 import { readFile } from "node:fs/promises";
 import { isAbsolute, join, relative, resolve, sep } from "node:path";
 import { z } from "zod";
-import { safeBeforeDispatch, type DispatchIntent } from "../command-plane/hooks.js";
+import type { DispatchIntent } from "../command-plane/hooks.js";
 import { resolveRepositoryRoot } from "../command-plane/paths.js";
 import { RosterAgentSchema } from "../command-plane/schema.js";
 import type { RosterAgent } from "../command-plane/types.js";
+import { getEnforcedRemaining } from "../token-governor/budgets.js";
+import {
+  catalogEmitsTokenSignals,
+  reGateBeforeSpawn,
+  selectSignalCapableRung,
+} from "../token-governor/failover-gate.js";
 import { getBuiltinPreset, parseCustomEngineId } from "./catalog.js";
 import { persistDispatchIntent } from "./dispatch-queue.js";
 import * as envScrub from "./env-scrub.js";
@@ -99,6 +105,11 @@ export async function dispatchEngine(
   if (!preferred) return { accepted: false };
 
   const snaps = healthSnaps(loaded.health);
+  const remaining = await getEnforcedRemaining(intent.hiveRoot, {
+    agentId: intent.agentId,
+    featureId: intent.featureId,
+  });
+  const numericBudgetCapSet = remaining.tokens !== null || remaining.usd !== null;
   const decision = selectEffectiveEngine({
     preferredEngineId: preferred,
     health: snaps,
@@ -109,8 +120,8 @@ export async function dispatchEngine(
       quotaGroups: loaded.policy.quotaGroups,
     },
     localGateOk: localContextOk(loaded.health),
-    budgetTokens: row?.budgetTokens ?? null,
-    budgetUsd: row?.budgetUsd ?? null,
+    budgetTokens: enforcedBudget(row?.budgetTokens, remaining.tokens, numericBudgetCapSet),
+    budgetUsd: enforcedBudget(row?.budgetUsd, remaining.usd, numericBudgetCapSet),
     model: row?.model ?? null,
     tier: intent.tier,
     agentId: intent.agentId,
@@ -133,8 +144,20 @@ export async function dispatchEngine(
   });
   const effectiveId = canonicalEngineId(review.engineId);
 
+  const model = resolveDispatchModel(intent, { model: row?.model ?? null }, effectiveId, {
+    localPack: loaded.localPack,
+    customEngine: customFor(loaded.custom, effectiveId),
+  });
+  if (!model.ok) return { accepted: false };
+
   if (effectiveId !== preferred) {
-    const gate = await safeBeforeDispatch({
+    const selected = selectSignalCapableRung(
+      [{ engineId: effectiveId, emitsTokenSignals: catalogEmitsTokenSignals(effectiveId) }],
+      { numericBudgetCapSet },
+    );
+    if (!("rung" in selected)) return { accepted: false };
+
+    const gate = await reGateBeforeSpawn(effectiveId, model.vendorModel, {
       intent,
       brief: {
         budgetTokens: row?.budgetTokens ?? null,
@@ -143,12 +166,6 @@ export async function dispatchEngine(
     });
     if (!gate.allow) return { accepted: false };
   }
-
-  const model = resolveDispatchModel(intent, { model: row?.model ?? null }, effectiveId, {
-    localPack: loaded.localPack,
-    customEngine: customFor(loaded.custom, effectiveId),
-  });
-  if (!model.ok) return { accepted: false };
 
   if (options.spawnAttempt) {
     const guard = guardHostSpawn(effectiveId, {
@@ -182,6 +199,16 @@ export async function dispatchEngine(
   // T022 starts the child. Until then the spec is built (scrubbed env, detached argv) and dropped.
   prepareSupervisorSpec(intent, effectiveId, loaded.custom, options.processEnv ?? process.env);
   return { accepted: false };
+}
+
+function enforcedBudget(
+  roster: number | null | undefined,
+  remaining: number | null,
+  numericBudgetCapSet: boolean,
+): number | null {
+  if (typeof roster === "number") return roster;
+  if (!numericBudgetCapSet) return null;
+  return remaining ?? 0;
 }
 
 function isSupervisorEngine(engineId: string): boolean {
