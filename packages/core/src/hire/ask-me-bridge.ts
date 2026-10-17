@@ -1,8 +1,9 @@
 import { mkdir } from "node:fs/promises";
 import { join } from "node:path";
 import { listAskMe, openAskMeItem } from "../command-plane/ask-me.js";
-import type { CommandPlaneErrorCode } from "../command-plane/types.js";
-import { loadReview, updateReview } from "./review.js";
+import type { AskMeAction, CommandPlaneErrorCode } from "../command-plane/types.js";
+import { HireReviewError, loadReview, updateReview } from "./review.js";
+import { cancelPendingHireReview } from "./cancel.js";
 
 const QUESTION_LIMIT = 4000;
 
@@ -81,4 +82,55 @@ async function storeAskMeId(hiveRoot: string, reviewId: string, askMeId: string)
   const review = await loadReview(hiveRoot, reviewId);
   if (!review || review.askMeId === askMeId || review.state !== "pending") return;
   await updateReview(hiveRoot, reviewId, { askMeId });
+}
+
+export type AskMeHireResult =
+  | { ok: true; code: "HIRE_ACK_CANCELS" }
+  | { ok: true; state: "pending" }
+  | { ok: false; code: CommandPlaneErrorCode | "HIRE_REVIEW_NOT_FOUND"; message: string };
+
+export type HandleUntrustedImportAskMeAnswerInput = {
+  hiveRoot: string;
+  reviewId: string;
+  action: AskMeAction;
+  reasonClass: string;
+};
+
+/**
+ * Hire-specific Ask-Me answer handling for `untrusted_import` items linked to a review.
+ * Never calls spawn confirm — acknowledge cancels the review (OD-018).
+ */
+export async function handleUntrustedImportAskMeAnswer(
+  input: HandleUntrustedImportAskMeAnswerInput,
+): Promise<AskMeHireResult> {
+  if (input.reasonClass !== "untrusted_import") {
+    return { ok: false, code: "INVALID_INPUT", message: "Reason class is not untrusted_import." };
+  }
+
+  const reviewId = input.reviewId.trim();
+  if (reviewId.length === 0) {
+    return { ok: false, code: "INVALID_INPUT", message: "Review id is missing." };
+  }
+
+  if (input.action === "keep_blocked") {
+    const review = await loadReview(input.hiveRoot, reviewId);
+    if (!review) {
+      return { ok: false, code: "HIRE_REVIEW_NOT_FOUND", message: `Hire review ${reviewId} was not found.` };
+    }
+    return { ok: true, state: "pending" };
+  }
+
+  if (input.action === "acknowledge") {
+    try {
+      await cancelPendingHireReview(input.hiveRoot, reviewId);
+      return { ok: true, code: "HIRE_ACK_CANCELS" };
+    } catch (err) {
+      if (err instanceof HireReviewError) {
+        return { ok: false, code: err.code, message: err.message };
+      }
+      throw err;
+    }
+  }
+
+  return { ok: false, code: "INVALID_INPUT", message: "Retry is not supported for hire untrusted_import." };
 }
