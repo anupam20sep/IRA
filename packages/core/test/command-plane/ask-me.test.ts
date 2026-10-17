@@ -19,6 +19,7 @@ const priorSuperspecRoot = process.env.SUPERSPEC_ROOT;
 
 const WEIGHT_ORDER: AskMeReasonClass[] = [
   "budget_exceed",
+  "circuit_breaker_stop",
   "destructive_git",
   "constitution_violation",
   "spec_scope_change",

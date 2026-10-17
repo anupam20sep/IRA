@@ -18,7 +18,6 @@ import {
   withLock,
   writeJsonAtomic,
 } from "../command-plane/store.js";
-import type { AskMeReasonClass } from "../command-plane/types.js";
 import type { ModelTier } from "../model-router.js";
 import { tokenRoot } from "./paths.js";
 import { BreakersFileSchema, CircuitBreakerStateSchema, TokenSettingsSchema } from "./schema.js";
@@ -325,10 +324,6 @@ async function blockRosterAgent(hiveRoot: string, workerKey: string): Promise<vo
   if (!locked.ok) throw new Error("ROSTER_BUSY");
 }
 
-/**
- * T012 adds `circuit_breaker_stop` to the Ask-Me enum. Until then the opener
- * rejects the class and stop still persists.
- */
 async function openStopAskMe(
   hiveRoot: string,
   workerKey: string,
@@ -340,7 +335,7 @@ async function openStopAskMe(
     featureId: validFeatureId(signal.featureId),
     taskId: signal.taskId && signal.taskId.trim().length > 0 ? signal.taskId : null,
     agentId: validAgentId(agentIdFrom(workerKey)),
-    reasonClass: "circuit_breaker_stop" as AskMeReasonClass,
+    reasonClass: "circuit_breaker_stop",
     question: `Circuit breaker stop (${state.trigger ?? signal.trigger}) for ${workerKey}. ${state.haltReason ?? haltReasonFor(signal)}`,
   });
   return opened.ok ? opened.item.id : null;

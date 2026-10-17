@@ -56,6 +56,7 @@ export type RosterAgent = z.infer<typeof RosterAgentSchema>;
 
 export type AskMeReasonClass =
   | "budget_exceed"
+  | "circuit_breaker_stop"
   | "destructive_git"
   | "constitution_violation"
   | "spec_scope_change"

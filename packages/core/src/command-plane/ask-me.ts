@@ -21,6 +21,7 @@ const isoTimestamp = z.string().datetime({ offset: true });
 /** Higher weight sorts first. Same class then breaks ties by older `createdAt`. */
 const REASON_WEIGHT: Record<AskMeReasonClass, number> = {
   budget_exceed: 100,
+  circuit_breaker_stop: 95,
   destructive_git: 90,
   constitution_violation: 80,
   spec_scope_change: 70,
