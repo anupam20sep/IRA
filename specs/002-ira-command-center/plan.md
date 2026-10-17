@@ -588,7 +588,7 @@ Stage HTTP server and test; commit `feat(command-center): loopback HTTP server a
 
 ### Task T013: Board shell and navigation chrome
 
-**Implements:** FR-001, FR-007, FR-016, FR-017, FR-022
+**Implements:** FR-001, FR-007, FR-015, FR-016, FR-017, FR-022
 
 **Depends on:** T003, T002
 
