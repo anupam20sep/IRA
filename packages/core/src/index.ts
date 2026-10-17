@@ -55,3 +55,10 @@ export {
   type CoordinatorLogEntry,
 } from "./coordinator-ledger.js";
 export * from "./command-plane/index.js";
+export {
+  installLearningMemory,
+  createLearningHooks,
+  listPatterns,
+  reindexFromMarkdown,
+  type LearningMemoryInstallOpts,
+} from "./learning-memory/index.js";
