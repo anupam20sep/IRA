@@ -1,12 +1,18 @@
+import { registerCommandPlaneHooks } from "../command-plane/hooks.js";
+import { createLearningHooks } from "./hooks.js";
 import { registerPatternsDoctorProbes, type PatternsDoctorInstallCtx } from "./slice-gate.js";
 
 export type LearningMemoryInstallOpts = {
-  /** When set, registers pattern-store doctor probes (full hive wiring in T013). */
+  projectRoot?: string;
+  /** When set, registers pattern-store doctor probes (OD-016). */
   doctor?: PatternsDoctorInstallCtx;
 };
 
-/** Stub install entry: doctor probe registration until hooks pipeline lands (T013). */
+/** Register P-001 learning hooks and optional pattern-store doctor probes. */
 export function installLearningMemory(opts: LearningMemoryInstallOpts): void {
+  if (opts.projectRoot) {
+    registerCommandPlaneHooks({ learning: createLearningHooks(opts.projectRoot) });
+  }
   if (opts.doctor) {
     registerPatternsDoctorProbes(opts.doctor);
   }

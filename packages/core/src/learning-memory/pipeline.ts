@@ -275,7 +275,7 @@ async function consolidateInjected(
   }
 }
 
-async function openLearningStore(root: string): Promise<LearningStore | null> {
+export async function openLearningStore(root: string): Promise<LearningStore | null> {
   const paths = resolvePatternStoreRoot(root);
   if (!paths.ok) return null;
   const opened = openPatternIndex({
