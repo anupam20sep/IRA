@@ -1,6 +1,6 @@
 import { randomBytes, randomUUID } from "node:crypto";
 import { accessSync, constants, statSync, type Stats } from "node:fs";
-import { mkdir, readFile, rename, unlink, writeFile } from "node:fs/promises";
+import { mkdir, readFile, rename, stat, unlink, writeFile } from "node:fs/promises";
 import { homedir } from "node:os";
 import { basename, dirname, join } from "node:path";
 import { answerAskMe } from "../command-plane/ask-me.js";
@@ -27,11 +27,15 @@ const REVIEW_ID_RE = /^hrv_[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a
 /** Tags that imply a code-writing hire and an isolated worktree (design spawn step 4). */
 const CODE_TAGS = new Set(["ios", "android", "backend", "frontend", "api", "mobile", "web"]);
 
+export type NameConflictAction = "merge" | "replace" | "cancel";
+
+const NAME_CONFLICT_ACTIONS: NameConflictAction[] = ["merge", "replace", "cancel"];
+
 export type HireSpawnConfirmInput = {
   reviewId: string;
   hiveRoot: string;
   repositoryRoot: string;
-  nameConflictAction?: "merge" | "replace" | "cancel";
+  nameConflictAction?: NameConflictAction;
   createWorktree?: boolean;
   sliceAValidated: boolean;
 };
@@ -46,7 +50,13 @@ export type SpawnedHireAgent = {
 
 export type SpawnResult =
   | { ok: true; agent: SpawnedHireAgent; askMeResolved: boolean }
-  | { ok: false; code: string; message: string };
+  | {
+      ok: false;
+      code: string;
+      message: string;
+      error?: string;
+      actions?: NameConflictAction[];
+    };
 
 type PersonaTarget = { path: string; body: string };
 
@@ -78,7 +88,7 @@ export async function hireSpawnConfirm(input: HireSpawnConfirmInput): Promise<Sp
 
   await mkdir(join(input.hiveRoot, "locks"), { recursive: true, mode: 0o700 });
   const locked = await withLock(join(input.hiveRoot, "locks", "roster.lock"), { waitMs: LEDGER_LOCK_WAIT_MS }, () =>
-    writeSpawn(input.hiveRoot, built.targets, built.agent),
+    writeSpawn(input.hiveRoot, built.targets, built.agent, input.nameConflictAction),
   );
   if (!locked.ok) return { ok: false, code: locked.code, message: "Roster lock is busy." };
   if (!locked.value.ok) return locked.value;
@@ -305,30 +315,137 @@ async function writeSpawn(
   hiveRoot: string,
   targets: PersonaTarget[],
   agent: RosterAgent,
+  nameConflictAction?: NameConflictAction,
 ): Promise<Extract<SpawnResult, { ok: false }> | { ok: true }> {
-  const written: string[] = [];
+  const roster = await readRoster(hiveRoot);
+  if (!roster.ok) return roster;
+
+  const existing = roster.agents.find((row) => row.id === agent.id);
+  const hireConflict = existing?.origin === "hire";
+  if (hireConflict && nameConflictAction !== "merge" && nameConflictAction !== "replace") {
+    return nameConflict(
+      nameConflictAction === "cancel"
+        ? "Spawn cancelled; the existing hire was left unchanged."
+        : "A hire with this id is already on the roster.",
+    );
+  }
+
+  const merged = hireConflict && nameConflictAction === "merge" && existing ? mergeHire(existing, agent) : agent;
+  const row = RosterAgentSchema.safeParse(merged);
+  if (!row.success) return { ok: false, code: "INVALID_INPUT", message: "Roster row is invalid." };
+
+  const staged: StagedPersona[] = [];
   try {
     for (const target of targets) {
-      await writeTextAtomic(target.path, target.body);
-      written.push(target.path);
+      staged.push({ tmp: await writeTempFile(target.path, target.body), dest: target.path });
     }
-    const roster = await readRoster(hiveRoot);
-    if (!roster.ok) {
-      await rollbackFiles(written);
-      return roster;
-    }
-    const next = upsertAgent(roster.agents, agent);
+  } catch {
+    await rollbackFiles(staged.map((item) => item.tmp));
+    return diskFailure();
+  }
+
+  const promoted = await promotePersonas(staged);
+  if (!promoted.ok) return diskFailure();
+
+  try {
+    const next = upsertAgent(roster.agents, row.data);
     const parsed = RosterAgentSchema.array().safeParse(next);
     if (!parsed.success) {
-      await rollbackFiles(written);
+      await restorePromoted(promoted.promoted);
       return { ok: false, code: "INVALID_INPUT", message: "Roster row is invalid." };
     }
     await writeJsonAtomic(join(hiveRoot, "roster.json"), parsed.data);
-    return { ok: true };
+  } catch {
+    await restorePromoted(promoted.promoted);
+    return diskFailure();
+  }
+
+  await discardBackups(promoted.promoted);
+  return { ok: true };
+}
+
+type StagedPersona = { tmp: string; dest: string };
+type PromotedPersona = { dest: string; backup: string | null };
+
+async function promotePersonas(
+  staged: StagedPersona[],
+): Promise<{ ok: true; promoted: PromotedPersona[] } | { ok: false }> {
+  const promoted: PromotedPersona[] = [];
+  try {
+    for (const item of staged) {
+      const backup = await asideExistingFile(item.dest);
+      try {
+        await rename(item.tmp, item.dest);
+      } catch (err) {
+        if (backup) await rename(backup, item.dest).catch(() => undefined);
+        throw err;
+      }
+      promoted.push({ dest: item.dest, backup });
+    }
+    return { ok: true, promoted };
+  } catch {
+    await restorePromoted(promoted);
+    await rollbackFiles(staged.map((item) => item.tmp));
+    return { ok: false };
+  }
+}
+
+async function asideExistingFile(dest: string): Promise<string | null> {
+  let info: Stats;
+  try {
+    info = await stat(dest);
   } catch (err) {
-    await rollbackFiles(written);
+    if ((err as NodeJS.ErrnoException).code === "ENOENT") return null;
     throw err;
   }
+  if (!info.isFile()) throw new Error("persona destination is not a file");
+  const backup = `${dest}.${process.pid}.${randomBytes(4).toString("hex")}.bak`;
+  await rename(dest, backup);
+  return backup;
+}
+
+async function restorePromoted(promoted: PromotedPersona[]): Promise<void> {
+  for (const item of [...promoted].reverse()) {
+    await unlink(item.dest).catch(() => undefined);
+    if (item.backup) await rename(item.backup, item.dest).catch(() => undefined);
+  }
+}
+
+async function discardBackups(promoted: PromotedPersona[]): Promise<void> {
+  await rollbackFiles(promoted.flatMap((item) => (item.backup ? [item.backup] : [])));
+}
+
+function nameConflict(message: string): Extract<SpawnResult, { ok: false }> {
+  return {
+    ok: false,
+    code: "HIRE_NAME_CONFLICT",
+    error: "HIRE_NAME_CONFLICT",
+    message,
+    actions: [...NAME_CONFLICT_ACTIONS],
+  };
+}
+
+function diskFailure(): Extract<SpawnResult, { ok: false }> {
+  return {
+    ok: false,
+    code: "HIRE_SPAWN_FAILED",
+    error: "HIRE_SPAWN_FAILED",
+    message: "Spawn was rolled back because a disk write failed.",
+  };
+}
+
+function mergeHire(existing: RosterAgent, incoming: RosterAgent): RosterAgent {
+  return {
+    ...existing,
+    capabilityTags: unique([...existing.capabilityTags, ...incoming.capabilityTags]),
+    allowedSkills: unique([...(existing.allowedSkills ?? []), ...(incoming.allowedSkills ?? [])]),
+    allowedMcp: unique([...(existing.allowedMcp ?? []), ...(incoming.allowedMcp ?? [])]),
+    personaPath: incoming.personaPath ?? existing.personaPath,
+  };
+}
+
+function unique(values: string[]): string[] {
+  return [...new Set(values)];
 }
 
 function upsertAgent(roster: RosterAgent[], agent: RosterAgent): RosterAgent[] {
@@ -396,16 +513,16 @@ async function appendHireSpawnedEvent(
   }
 }
 
-async function writeTextAtomic(filePath: string, text: string): Promise<void> {
+async function writeTempFile(filePath: string, text: string): Promise<string> {
   await mkdir(dirname(filePath), { recursive: true });
   const tmp = join(dirname(filePath), `.${basename(filePath)}.${process.pid}.${randomBytes(6).toString("hex")}.tmp`);
-  await writeFile(tmp, text, { encoding: "utf8", flag: "wx", mode: 0o644 });
   try {
-    await rename(tmp, filePath);
+    await writeFile(tmp, text, { encoding: "utf8", flag: "wx", mode: 0o644 });
   } catch (err) {
     await unlink(tmp).catch(() => undefined);
     throw err;
   }
+  return tmp;
 }
 
 async function rollbackFiles(paths: string[]): Promise<void> {
