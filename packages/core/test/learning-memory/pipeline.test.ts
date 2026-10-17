@@ -3,6 +3,7 @@ import { mkdtemp, mkdir, readdir, rm, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { DEFAULT_LEARNING_CONFIG, type LearningConfig } from "../../src/learning-memory/config.js";
+import { writePatternAtomic } from "../../src/learning-memory/pattern-io.js";
 import {
   runConsolidateAfterDistill,
   runDistillAfterResult,
@@ -179,6 +180,38 @@ describe("runDistillAfterResult", () => {
     releaseFirst();
     await Promise.all([first, second]);
     expect(order).toEqual(["first-start", "first-end", "second"]);
+  });
+});
+
+describe("OD-016 markdown retrieve", () => {
+  it("RETRIEVE succeeds when indexAvailable is false", async () => {
+    const root = await tempRoot();
+    const patternsDir = join(root, ".superspec", "patterns");
+    await writePatternAtomic(patternsDir, {
+      frontmatter: {
+        id: "pat_mdonly",
+        kind: "success",
+        createdAt: "2026-10-15T12:00:00.000Z",
+        updatedAt: "2026-10-15T12:00:00.000Z",
+        signals: { frTags: ["FR-004"], taskKind: "code", featureId: "003-ira-learning-memory" },
+        evidenceRefs: ["task:T012"],
+        useCount: 0,
+        status: "active",
+      },
+      summary: "Markdown scan still injects a lesson when the index is down.",
+    });
+    const summary = await runRetrieveForTask(
+      store({
+        repositoryRoot: root,
+        patternsDir,
+        index: null,
+        indexAvailable: false,
+      }),
+      retrieveCtx(),
+    );
+    expect(summary?.patternIds).toEqual(["pat_mdonly"]);
+    expect(summary?.text).toContain("Markdown scan still injects a lesson");
+    expect(logs().some((line) => line.includes("learning.phase=retrieve error"))).toBe(false);
   });
 });
 

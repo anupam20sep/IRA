@@ -11,6 +11,7 @@ import { writePatternAtomic } from "../../src/learning-memory/pattern-io.js";
 import * as pipeline from "../../src/learning-memory/pipeline.js";
 import { openPatternIndex, upsertPattern } from "../../src/learning-memory/pattern-index.js";
 import { registerCommandPlaneHooks } from "../../src/command-plane/hooks.js";
+import * as dispatch from "../../src/engines/dispatch.js";
 
 const PLAN = [
   "### Task T001: Wire forge",
@@ -239,20 +240,45 @@ describe("forge learning hooks", () => {
   });
 });
 
+describe("OD-016 record-result isolation", () => {
+  it("does not change exit code when background distill throws", async () => {
+    let specDir = "";
+    await withSlowDistillMock(async () => {
+      const started = Date.now();
+      const result = await runRecordResultFixture({ passed: true });
+      specDir = result.repo.specDir;
+      expect(result.code).toBe(0);
+      expect(Date.now() - started).toBeLessThan(500);
+      expect(result.stdout).not.toContain("FAILED");
+      expect(JSON.parse(result.stdout)).toMatchObject({ ok: true, taskId: "T001", passed: true });
+      expect(logs.some((line) => line.includes("background distill exploded"))).toBe(false);
+    });
+    expect(logs.some((line) => line.includes("background distill exploded"))).toBe(true);
+    expect(await loadState(specDir)).toMatchObject({
+      tasks: { T001: { status: "done", reviewFailures: 0 } },
+    });
+  });
+});
+
+describe("OD-020 Slice A distill", () => {
+  it("writes no pattern md when sliceAValidated is false", async () => {
+    const repo = await bareRepo();
+    await withDoctorSnapshot({ sliceAValidated: false }, async () => {
+      const { code } = await runRecordResultFixture({ passed: true, repo });
+      expect(code).toBe(0);
+      await waitForLog("SLICE_A_ONLY");
+      expect(await countPatternMarkdown(repo.root)).toBe(0);
+    });
+  });
+});
+
 async function seededRepo(): Promise<{
   root: string;
   specDir: string;
   planPath: string;
   patternsDir: string;
 }> {
-  const root = await mkdtemp(join(tmpdir(), "lm-forge-"));
-  roots.push(root);
-  const specDir = join(root, "specs", "003-demo");
-  const patternsDir = join(root, ".superspec", "patterns");
-  await mkdir(specDir, { recursive: true });
-  await writeFile(join(root, "program.md"), "# program\n", "utf8");
-  const planPath = join(specDir, "plan.md");
-  await writeFile(planPath, PLAN, "utf8");
+  const repo = await bareRepo();
   const record = {
     frontmatter: {
       id: "pat_forge1",
@@ -266,17 +292,106 @@ async function seededRepo(): Promise<{
     },
     summary: LESSON,
   };
-  await writePatternAtomic(patternsDir, record);
+  await writePatternAtomic(repo.patternsDir, record);
   const opened = openPatternIndex({
-    indexPath: join(patternsDir, "index.sqlite"),
-    lockPath: join(patternsDir, ".index.lock"),
+    indexPath: join(repo.patternsDir, "index.sqlite"),
+    lockPath: join(repo.patternsDir, ".index.lock"),
   });
   try {
     if (opened.index && opened.indexAvailable) upsertPattern(opened.index, record);
   } finally {
     opened.close();
   }
+  return repo;
+}
+
+async function bareRepo(): Promise<{
+  root: string;
+  specDir: string;
+  planPath: string;
+  patternsDir: string;
+}> {
+  const root = await mkdtemp(join(tmpdir(), "lm-forge-"));
+  roots.push(root);
+  const specDir = join(root, "specs", "003-demo");
+  const patternsDir = join(root, ".superspec", "patterns");
+  await mkdir(specDir, { recursive: true });
+  await writeFile(join(root, "program.md"), "# program\n", "utf8");
+  const planPath = join(specDir, "plan.md");
+  await writeFile(planPath, PLAN, "utf8");
   return { root, specDir, planPath, patternsDir };
+}
+
+async function runRecordResultFixture(input: {
+  passed: boolean;
+  repo?: { root: string; specDir: string; planPath: string };
+}): Promise<{ code: number; stdout: string; repo: { root: string; specDir: string; planPath: string } }> {
+  const repo = input.repo ?? (await bareRepo());
+  const result = await runCli([
+    "record-result",
+    "--plan",
+    repo.planPath,
+    "--dir",
+    repo.specDir,
+    "--task",
+    "T001",
+    "--passed",
+    input.passed ? "true" : "false",
+  ]);
+  return { code: result.code, stdout: result.stdout, repo };
+}
+
+/**
+ * Hang DISTILL past the record-result return, then reject off-stack (OD-016).
+ * The handler must already have exited before the rejection is logged.
+ */
+async function withSlowDistillMock(run: () => Promise<void>): Promise<void> {
+  let release = (): void => {};
+  const gate = new Promise<void>((resolve) => {
+    release = resolve;
+  });
+  const realSchedule = pipeline.scheduleLearningAfterRecordResult;
+  const spy = vi.spyOn(pipeline, "scheduleLearningAfterRecordResult").mockImplementation((root, ctx) => {
+    realSchedule(root, ctx, {
+      runDistill: () =>
+        gate.then(() => {
+          throw new Error("background distill exploded");
+        }),
+    });
+  });
+  try {
+    await run();
+    release();
+    await waitForLog("background distill exploded");
+  } finally {
+    spy.mockRestore();
+  }
+}
+
+/** Inject the doctor snapshot the distill write gate reads (OD-020). */
+async function withDoctorSnapshot(
+  snapshot: { sliceAValidated: boolean },
+  run: () => Promise<void>,
+): Promise<void> {
+  const spy = vi.spyOn(dispatch, "readSliceAValidated").mockResolvedValue(snapshot.sliceAValidated);
+  try {
+    await run();
+    if (spy.mock.calls.length === 0) {
+      throw new Error("doctor snapshot was not consulted");
+    }
+  } finally {
+    spy.mockRestore();
+  }
+}
+
+async function countPatternMarkdown(repoRoot: string): Promise<number> {
+  try {
+    const names = await readdir(join(repoRoot, ".superspec", "patterns"));
+    return names.filter((name) => name.endsWith(".md")).length;
+  } catch (err) {
+    if (err && typeof err === "object" && "code" in err && err.code === "ENOENT") return 0;
+    throw err;
+  }
 }
 
 async function waitForLog(needle: string): Promise<void> {
