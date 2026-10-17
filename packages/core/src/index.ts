@@ -62,3 +62,11 @@ export {
   reindexFromMarkdown,
   type LearningMemoryInstallOpts,
 } from "./learning-memory/index.js";
+export {
+  bootstrapTokenGovernor,
+  isTokenGovernorRegistered,
+  registerTokenGovernor,
+  registerTokenGovernorIfHive,
+  tokenHooksImpl,
+} from "./token-governor/index.js";
+export type * from "./token-governor/types.js";
