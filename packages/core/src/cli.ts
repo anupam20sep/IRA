@@ -54,6 +54,7 @@ import { isDirectRun } from "./cli-entry.js";
 import { runHookIngest } from "./engines/hook-ingest.js";
 import { runEnginesCli } from "./engines/cli-engines.js";
 import { runTokenCli } from "./token-governor/cli-token.js";
+import { runHireCli } from "./hire/cli-hire.js";
 import { writeStatusFile } from "./fr-status.js";
 import {
   commandPlaneHelpSummary,
@@ -99,6 +100,10 @@ async function runCliInner(argv: string[], options?: RunCliOptions): Promise<Cli
 
   if (command === "token") {
     return runTokenCli(rest);
+  }
+
+  if (command === "hire") {
+    return runHireCli(rest);
   }
 
   if (command === "engines" && rest.length > 0 && rest[0] !== "hook-ingest") {
@@ -626,7 +631,7 @@ async function runCliInner(argv: string[], options?: RunCliOptions): Promise<Cli
 
   return {
     code: 0,
-    stdout: `Unknown command: ${command ?? "(none)"}. Try: init | matrix | lint | scaffold | list-personas | patterns | token | coordinator-init | coordinator-brief | next-task | begin-task | record-result | route-model | sync-status | forge-status | ${commandPlaneHelpSummary()} | mcp`,
+    stdout: `Unknown command: ${command ?? "(none)"}. Try: init | matrix | lint | scaffold | list-personas | patterns | token | hire | coordinator-init | coordinator-brief | next-task | begin-task | record-result | route-model | sync-status | forge-status | ${commandPlaneHelpSummary()} | mcp`,
   };
 }
 
