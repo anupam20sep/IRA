@@ -28,6 +28,7 @@ export function buildEnginesCliHelpLines(): string[] {
     "superspec engines policy set [--failover true|false] [--cross-engine-review true|false] [--delegate-to-host claude|codex|cursor-agent|null] [--cwd path]",
     "superspec engines local-pack set --engine opencode|crush --backend ollama|lmstudio|vllm|byok --model <id> [--base-url] [--context N] [--cwd path]",
     "superspec engines hooks install [--host claude|codex|cursor-agent] [--cwd path]",
+    "superspec engines supervise <intent-path>",
   ];
 }
 

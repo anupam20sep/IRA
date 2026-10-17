@@ -53,6 +53,7 @@ import {
 import { isDirectRun } from "./cli-entry.js";
 import { runHookIngest } from "./engines/hook-ingest.js";
 import { runEnginesCli } from "./engines/cli-engines.js";
+import { runSuperviseIntent } from "./engines/supervise-runner.js";
 import { runTokenCli } from "./token-governor/cli-token.js";
 import { runHireCli } from "./hire/cli-hire.js";
 import { writeStatusFile } from "./fr-status.js";
@@ -104,6 +105,15 @@ async function runCliInner(argv: string[], options?: RunCliOptions): Promise<Cli
 
   if (command === "hire") {
     return runHireCli(rest);
+  }
+
+  if (command === "engines" && rest[0] === "supervise") {
+    const intentPath = rest[1];
+    if (!intentPath || intentPath.startsWith("-")) {
+      return { code: 1, stdout: "Error: intent path is required.\n" };
+    }
+    const supervised = await runSuperviseIntent(intentPath);
+    return { code: supervised.ok ? 0 : 1, stdout: `${JSON.stringify(supervised)}\n` };
   }
 
   if (command === "engines" && rest.length > 0 && rest[0] !== "hook-ingest") {

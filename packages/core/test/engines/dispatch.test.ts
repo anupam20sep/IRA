@@ -275,15 +275,17 @@ describe("dispatch integrates failover, review, and model resolution", () => {
     expect(await dispatchEngine(intent(root), { sliceAValidated: true })).toEqual({ accepted: false });
   });
 
-  it("prepares a scrubbed supervisor spec after Slice A and does not spawn", async () => {
+  it("spawns a detached supervisor after Slice A with a scrubbed env", async () => {
     const root = await hive({
       roster: [agent({ id: "implementer", engine: "opencode", model: "standard" })],
       health: { opencode: healthRow("opencode", "byok") },
     });
     const spec = vi.spyOn(supervisor, "buildDetachedSupervisorSpawnSpec");
     const scrub = vi.spyOn(envScrub, "buildSupervisorEnv");
+    const spawn = vi.fn(() => ({ pid: 4242, unref: () => {} }));
     const result = await dispatchEngine(intent(root), {
       sliceAValidated: true,
+      spawnFn: spawn as never,
       processEnv: {
         PATH: "/usr/bin",
         HOME: "/Users/ira",
@@ -292,7 +294,12 @@ describe("dispatch integrates failover, review, and model resolution", () => {
         HOST: "secret-host",
       },
     });
-    expect(result).toEqual({ accepted: false });
+    expect(result).toEqual({ accepted: true });
+    expect(spawn).toHaveBeenCalledWith(
+      "superspec",
+      ["engines", "supervise", expect.any(String)],
+      expect.objectContaining({ detached: true, shell: false, stdio: "ignore" }),
+    );
     expect(scrub).toHaveBeenCalled();
     expect(spec).toHaveBeenCalled();
     const built = spec.mock.results.at(-1)?.value as { env: Record<string, string>; shell: boolean; detached: boolean };

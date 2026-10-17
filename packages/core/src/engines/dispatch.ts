@@ -30,6 +30,7 @@ import { resolveDispatchModel } from "./resolve-model.js";
 import { CustomEnginesFileSchema, EngineHealthSchema, LocalPackProfileSchema } from "./schema.js";
 import { hiveInitialized, readPolicy } from "./store.js";
 import * as supervisor from "./supervisor.js";
+import { spawnDetachedSupervisor, writeSupervisorIntent, type DetachedSpawnFn } from "./supervise-runner.js";
 import type { CustomEngine, EngineHealth, FailoverPolicy, LadderRung, LocalPackProfile } from "./types.js";
 
 export type EngineDispatchResult =
@@ -46,6 +47,8 @@ export type DispatchEngineOptions = {
   spawnAttempt?: { argv0: string };
   engineStarts?: EngineStartRecord[];
   processEnv?: Readonly<Record<string, string | undefined>>;
+  /** Test seam. Production uses `node:child_process.spawn`. */
+  spawnFn?: DetachedSpawnFn;
 };
 
 const SUPERVISOR_IDS = new Set(["opencode", "crush", "aider", "custom"]);
@@ -196,9 +199,19 @@ export async function dispatchEngine(
   if (blocked) return blocked;
   if (!isSupervisorEngine(effectiveId)) return { accepted: false };
 
-  // T022 starts the child. Until then the spec is built (scrubbed env, detached argv) and dropped.
-  prepareSupervisorSpec(intent, effectiveId, loaded.custom, options.processEnv ?? process.env);
-  return { accepted: false };
+  const spec = prepareSupervisorSpec(intent, effectiveId, loaded.custom, options.processEnv ?? process.env);
+  try {
+    await writeSupervisorIntent(intent, effectiveId);
+    const spawned = await spawnDetachedSupervisor({
+      intentPath: spec.argv[3],
+      env: spec.env,
+      spawnFn: options.spawnFn,
+    });
+    if (!spawned.ok) return { accepted: false };
+    return { accepted: true };
+  } catch {
+    return { accepted: false };
+  }
 }
 
 function enforcedBudget(

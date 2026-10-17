@@ -129,11 +129,18 @@ describe("EngineHooks.dispatch failover re-gate", () => {
     await ensureTokenLayout(root);
     await setBudget(root, { scope: "feature", scopeId: "f1", unit: "usd", cap: 5 });
     const scrub = vi.spyOn(envScrub, "buildSupervisorEnv");
+    const spawn = vi.fn(() => ({ pid: 4242, unref: () => {} }));
     const result = await dispatchEngine(intent(root, { featureId: "f1" }), {
       sliceAValidated: true,
+      spawnFn: spawn as never,
       processEnv: { PATH: "/usr/bin", OPENAI_API_KEY: "sk-aider" },
     });
-    expect(result).toEqual({ accepted: false });
+    expect(result).toEqual({ accepted: true });
+    expect(spawn).toHaveBeenCalledWith(
+      "superspec",
+      ["engines", "supervise", expect.any(String)],
+      expect.objectContaining({ detached: true, shell: false }),
+    );
     expect(scrub).toHaveBeenCalledWith(
       expect.objectContaining({ byokAllowlist: ["OPENAI_API_KEY"] }),
     );
