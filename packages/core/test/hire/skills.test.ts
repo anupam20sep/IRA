@@ -2,9 +2,8 @@ import { mkdtemp } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
-import { applyReviewEdits } from "../../src/hire/review.js";
+import { applyReviewEdits, createPendingReview } from "../../src/hire/review.js";
 import { allowedSkillsAfterConsent, mergeSkillConsentDecisions, scanSkill } from "../../src/hire/skills.js";
-import { createPendingReview } from "../../src/hire/review.js";
 import type { HireManifest, SanitizationReport, SkillConsent } from "../../src/hire/types.js";
 
 const MANIFEST: HireManifest = {

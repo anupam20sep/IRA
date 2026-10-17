@@ -1,0 +1,22 @@
+schemaVersion: hireManifest/v1
+id: qa-specialist
+displayName: QA Specialist
+goal: Test and verify product quality across releases.
+capabilityTags: [qa, testing]
+suggestedEngine: cursor
+suggestedModelTier: economy
+budget:
+  tokens: 100000
+  usd: 25
+allowlists:
+  skills: []
+  mcp: []
+persona:
+  harness: cursor
+  scope: project
+  body: |
+    ---
+    name: qa-specialist
+    description: Verify releases with structured test plans.
+    ---
+    You design test cases, reproduce bugs, and confirm fixes before ship.

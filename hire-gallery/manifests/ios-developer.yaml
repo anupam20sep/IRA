@@ -1,0 +1,22 @@
+schemaVersion: hireManifest/v1
+id: ios-developer
+displayName: iOS Developer
+goal: Ship SwiftUI features for mobile apps.
+capabilityTags: [ios, mobile, swiftui]
+suggestedEngine: cursor
+suggestedModelTier: standard
+budget:
+  tokens: 200000
+  usd: 50
+allowlists:
+  skills: []
+  mcp: []
+persona:
+  harness: cursor
+  scope: project
+  body: |
+    ---
+    name: ios-developer
+    description: Ship native iOS features with SwiftUI.
+    ---
+    You focus on SwiftUI, UIKit integration, and App Store–ready mobile delivery.

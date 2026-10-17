@@ -1,0 +1,23 @@
+{
+  "schemaVersion": 1,
+  "entries": [
+    {
+      "id": "ios-developer",
+      "title": "iOS Developer",
+      "description": "Ship SwiftUI features for mobile apps.",
+      "capabilityTags": ["ios", "mobile", "swiftui"],
+      "manifestPath": "manifests/ios-developer.yaml",
+      "manifestSha256": "0613f3cce3903aece8457c257eea57afdac13a70bdcf695d21862e8c9f125dab",
+      "trustHint": "curated_catalog"
+    },
+    {
+      "id": "qa-specialist",
+      "title": "QA Specialist",
+      "description": "Test and verify product quality across releases.",
+      "capabilityTags": ["qa", "testing"],
+      "manifestPath": "manifests/qa-specialist.yaml",
+      "manifestSha256": "d42fdffe6d2de833ff1cffd3874d0c4c6a26d6dd545227cb5d0cc353fa7e35d9",
+      "trustHint": "curated_catalog"
+    }
+  ]
+}
