@@ -2,13 +2,13 @@
 
 **Mode**: full  
 **Program**: Ira (Intelligent Resource Automation)  
-**Last updated**: 2026-10-17T11:30:00+05:30  
+**Last updated**: 2026-10-17T20:42:00+05:30  
 **Requirements source**: `docs/superspec/specs/2026-09-06-agent-command-plane-requirements.md`  
 **Architecture amendment (LOCKED)**: `docs/superspec/specs/ira-architecture-amendment-2026-10-16.md` — wins over conflicting design text
 
 Multi-spec workstream tracker for Ira. Each row is owned by the agent/human working that spec — edit only your row; re-read this file before updating.
 
-**Lifecycle**: Slice A **closed**. **P-003** + **P-004** shipped (`9161419` → origin + ira). Next: **P-005** hire-gallery (route → forge).  
+**Lifecycle**: Slice A **closed**. **P-005** hire-gallery forge **22/22** complete; validate conditional (human OD-018 sign-off + package tsc debt).  
 **Model routing**: complex → Grok 4.7; otherwise → Composer.
 
 ## Forge order (OD-020 Slice A) — COMPLETE
@@ -28,7 +28,7 @@ Multi-spec workstream tracker for Ira. Each row is owned by the agent/human work
 | P-002 | ira-command-center | P1 | @composer | ship | specs/002-ira-command-center | Shipped to origin/master @ d8c48a0; validate COMPLETE; 25/25; T025 signed |
 | P-003 | ira-learning-memory | P1 | @composer | ship | specs/003-ira-learning-memory | Shipped origin+ira @ 41a75dc; 21/21; validate COMPLETE |
 | P-004 | ira-token-context | P1 | @composer | ship | specs/004-ira-token-context | Validate COMPLETE 2026-10-17; 24/24; 88 token-governor + 752 core |
-| P-005 | ira-hire-gallery | P2 | @composer | route | specs/005-ira-hire-gallery | Remediated; plan 22 tasks + map; lint OK; spawn after Slice A |
+| P-005 | ira-hire-gallery | P2 | @composer | validate | specs/005-ira-hire-gallery | Forge 22/22; hire 88/88; matrix 0 gaps; conditional validate (see `.superspec/reports/VALIDATE.md`) |
 | P-006 | ira-engine-adapters | P2 | @composer | validate-slice-a | specs/006-ira-engine-adapters | Slice A validated 2026-10-16; 572 tests; T022–T024 deferred |
 | P-007 | ira-integrations | P3 | @composer | deferred | specs/007-ira-integrations | INT-* Hermes/OpenClaw nice-to-have |
 
