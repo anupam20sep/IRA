@@ -56,6 +56,7 @@ import { runEnginesCli } from "./engines/cli-engines.js";
 import { runSuperviseIntent } from "./engines/supervise-runner.js";
 import { runTokenCli } from "./token-governor/cli-token.js";
 import { runHireCli } from "./hire/cli-hire.js";
+import { runIntegrationsCli } from "./integrations/cli-integrations.js";
 import { writeStatusFile } from "./fr-status.js";
 import {
   commandPlaneHelpSummary,
@@ -105,6 +106,10 @@ async function runCliInner(argv: string[], options?: RunCliOptions): Promise<Cli
 
   if (command === "hire") {
     return runHireCli(rest);
+  }
+
+  if (command === "integrations") {
+    return runIntegrationsCli(rest);
   }
 
   if (command === "engines" && rest[0] === "supervise") {

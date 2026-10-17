@@ -57,6 +57,7 @@ import { buildCommandPlaneMcpTools } from "./command-plane/mcp-command-plane-too
 import { buildEnginesMcpTools } from "./engines/mcp-handlers.js";
 import { buildTokenMcpTools } from "./token-governor/mcp-handlers.js";
 import { buildHireMcpTools, wrapAskMeAnswerWithHire } from "./hire/mcp-handlers.js";
+import { buildIntegrationsMcpTools } from "./integrations/cli-integrations.js";
 
 interface ToolContent {
   content: { type: "text"; text: string }[];
@@ -567,6 +568,7 @@ export function buildToolDefinitions(): ToolDef[] {
     ...(buildHireMcpTools() as ToolDef[]),
     ...(buildEnginesMcpTools() as ToolDef[]),
     ...(buildTokenMcpTools() as ToolDef[]),
+    ...(buildIntegrationsMcpTools() as ToolDef[]),
   ];
 }
 
