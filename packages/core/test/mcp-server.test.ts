@@ -51,6 +51,17 @@ describe("MCP tool definitions", () => {
         "sync-status",
         "task-abort",
         "task-hold",
+        "token-breaker-reset",
+        "token-breaker-status",
+        "token-budget-set",
+        "token-budget-show",
+        "token-compaction-list",
+        "token-forecast",
+        "token-gauge-query",
+        "token-gauge-report",
+        "token-spend-query",
+        "token-spend-record",
+        "token-tier-override",
       ].sort(),
     );
   });
