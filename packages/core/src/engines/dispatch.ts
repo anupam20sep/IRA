@@ -1,9 +1,11 @@
-import { readFile } from "node:fs/promises";
+import { randomUUID } from "node:crypto";
+import { mkdir, readFile } from "node:fs/promises";
 import { isAbsolute, join, relative, resolve, sep } from "node:path";
 import { z } from "zod";
 import type { DispatchIntent } from "../command-plane/hooks.js";
 import { resolveRepositoryRoot } from "../command-plane/paths.js";
-import { RosterAgentSchema } from "../command-plane/schema.js";
+import { IraEventSchema, RosterAgentSchema } from "../command-plane/schema.js";
+import { EVENT_LOCK_WAIT_MS, appendJsonlLine, withLock } from "../command-plane/store.js";
 import type { RosterAgent } from "../command-plane/types.js";
 import { getEnforcedRemaining } from "../token-governor/budgets.js";
 import {
@@ -14,7 +16,7 @@ import {
 import { getBuiltinPreset, parseCustomEngineId } from "./catalog.js";
 import { persistDispatchIntent } from "./dispatch-queue.js";
 import * as envScrub from "./env-scrub.js";
-import { selectEffectiveEngine, type FailoverHealthSnap } from "./failover.js";
+import { selectEffectiveEngine, type FailoverEvent, type FailoverHealthSnap } from "./failover.js";
 import {
   canonicalEngineId,
   guardHostSpawn,
@@ -24,6 +26,7 @@ import {
 import {
   applyCrossEngineReview,
   isReviewerPersona,
+  type CrossEngineReviewResult,
   type EngineStartRecord,
 } from "./review-policy.js";
 import { resolveDispatchModel } from "./resolve-model.js";
@@ -201,6 +204,7 @@ export async function dispatchEngine(
 
   const spec = prepareSupervisorSpec(intent, effectiveId, loaded.custom, options.processEnv ?? process.env);
   try {
+    await recordDispatchBoundaryEvents(intent, boundaryEvents(intent, decision.failoverEvent, review, effectiveId));
     await writeSupervisorIntent(intent, effectiveId);
     const spawned = await spawnDetachedSupervisor({
       intentPath: spec.argv[3],
@@ -211,6 +215,70 @@ export async function dispatchEngine(
     return { accepted: true };
   } catch {
     return { accepted: false };
+  }
+}
+
+/**
+ * Failover and review-degrade records land before the supervisor child exists,
+ * so they precede that child's `engine.start`.
+ */
+function boundaryEvents(
+  intent: DispatchIntent,
+  failoverEvent: FailoverEvent | undefined,
+  review: CrossEngineReviewResult,
+  engineId: string,
+): Array<{ type: string; data: Record<string, unknown> }> {
+  const events: Array<{ type: string; data: Record<string, unknown> }> = [];
+  if (failoverEvent) {
+    events.push({
+      type: failoverEvent.type,
+      data: {
+        agentId: failoverEvent.data.agentId,
+        taskId: failoverEvent.data.taskId,
+        fromEngine: failoverEvent.data.fromEngine,
+        toEngine: failoverEvent.data.toEngine,
+        reasonClass: failoverEvent.data.reasonClass,
+        rung: failoverEvent.data.rung,
+      },
+    });
+  }
+  if (review.policyDegraded) {
+    events.push({
+      type: "engine.policy_degraded",
+      data: {
+        taskId: intent.taskId,
+        policy: "cross_engine_review",
+        reason: review.policyDegraded.reason,
+        engineId,
+      },
+    });
+  }
+  return events;
+}
+
+async function recordDispatchBoundaryEvents(
+  intent: DispatchIntent,
+  events: Array<{ type: string; data: Record<string, unknown> }>,
+): Promise<void> {
+  if (events.length === 0) return;
+  const eventsDir = join(intent.hiveRoot, "events");
+  await mkdir(eventsDir, { recursive: true });
+  await mkdir(join(intent.hiveRoot, "locks"), { recursive: true });
+  for (const item of events) {
+    const parsed = IraEventSchema.safeParse({
+      id: `evt_${randomUUID()}`,
+      type: item.type,
+      version: 1,
+      ts: new Date().toISOString(),
+      featureId: intent.featureId,
+      actor: { kind: "ira", id: "ira" },
+      data: item.data,
+    });
+    if (!parsed.success) continue;
+    const locked = await withLock(join(intent.hiveRoot, "locks", "events.lock"), { waitMs: EVENT_LOCK_WAIT_MS }, () =>
+      appendJsonlLine(join(eventsDir, "events.jsonl"), parsed.data),
+    );
+    if (!locked.ok) return;
   }
 }
 
