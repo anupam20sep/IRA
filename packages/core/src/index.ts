@@ -84,3 +84,12 @@ export type {
   HireImportRequest,
   HireImportResponse,
 } from "./hire/import.js";
+export {
+  loadIntegrationConfig,
+  saveIntegrationConfig,
+  createShareToken,
+  verifyShareToken,
+  assertShareCannotMutate,
+  integrationDoctorFindings,
+} from "./integrations/index.js";
+export type { IntegrationConfig } from "./integrations/index.js";
