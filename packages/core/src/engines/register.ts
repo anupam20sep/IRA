@@ -1,6 +1,6 @@
 import { statSync } from "node:fs";
 import { join } from "node:path";
-import { registerCommandPlaneHooks } from "../command-plane/hooks.js";
+import { registerCommandPlaneHooks, type EngineHooks } from "../command-plane/hooks.js";
 import { createEngineHooks } from "./hooks-impl.js";
 
 export type RegisterEngineHooksDeps = {
@@ -10,7 +10,7 @@ export type RegisterEngineHooksDeps = {
 /** Wire engine hooks into the command-plane registry (OD-015 fail-closed lives in safe* callers). */
 export function registerEngineHooks(hiveRoot: string, deps?: RegisterEngineHooksDeps): void {
   const register = deps?.registerCommandPlaneHooks ?? registerCommandPlaneHooks;
-  register({ engine: createEngineHooks(hiveRoot) });
+  register({ engine: createEngineHooks(hiveRoot) as EngineHooks });
 }
 
 function hiveLayoutPresent(hiveRoot: string): boolean {

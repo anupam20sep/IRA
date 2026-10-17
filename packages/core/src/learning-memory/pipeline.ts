@@ -137,13 +137,14 @@ async function runScheduled(
 ): Promise<void> {
   const timeoutMs = deps?.distillTimeoutMs ?? DEFAULT_DISTILL_TIMEOUT_MS;
   try {
-    if (deps?.runDistill) {
+    const runDistill = deps?.runDistill;
+    if (runDistill) {
       await withRepositoryWriteLock(root, async () => {
         try {
           console.error("learning.phase=distill");
-          const result = await withTimeout(Promise.resolve(deps.runDistill(root, ctx)), timeoutMs);
+          const result = await withTimeout(Promise.resolve(runDistill(root, ctx)), timeoutMs);
           const patternId = patternIdFrom(result);
-          if (!patternId || !deps.runConsolidate) return;
+          if (!patternId || !deps?.runConsolidate) return;
           await consolidateInjected(deps.runConsolidate, patternId);
         } catch (err) {
           logDistillFailure(err);

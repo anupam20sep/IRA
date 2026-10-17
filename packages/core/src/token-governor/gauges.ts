@@ -34,7 +34,7 @@ function gaugeFromInput(input: ReportGaugeInput): ContextGauge {
       updatedAt,
     });
   }
-  const { usedTokens, limitTokens } = input;
+  const { usedTokens, limitTokens } = input as Extract<ReportGaugeInput, { usedTokens: number }>;
   const ratio = clampRatio(usedTokens, limitTokens);
   return ContextGaugeSchema.parse({
     state: "measured",

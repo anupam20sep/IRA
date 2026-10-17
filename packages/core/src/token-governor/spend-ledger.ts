@@ -95,7 +95,11 @@ export async function appendSpendEvent(
   options?: AppendSpendEventOptions,
 ): Promise<AppendSpendEventResult> {
   const guarded = await guardSideEffectWrite(hiveRoot, async () => {
-    const fields = SpendEventInputSchema.parse({ engine: null, model: null, ...input });
+    const fields = SpendEventInputSchema.parse({
+      ...input,
+      engine: input.engine ?? null,
+      model: input.model ?? null,
+    });
     const id = options?.id ?? `spend_${randomUUID()}`;
     const spend = SpendEventSchema.parse({
       ...fields,

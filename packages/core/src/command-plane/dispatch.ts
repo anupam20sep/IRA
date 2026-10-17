@@ -286,11 +286,14 @@ export async function dispatchTask(input: DispatchTaskInput): Promise<DispatchTa
   }
 
   const dispatched = await safeEngineDispatch(intent);
-  if (dispatched?.accepted === false) {
+  if (dispatched && "ok" in dispatched && dispatched.ok === false) {
+    return stop(dispatched.code, { accepted: false });
+  }
+  if (dispatched && "accepted" in dispatched && dispatched.accepted === false) {
     if (dispatched.reason === HOOK_FAILED_CLOSED) return stop("HOOK_FAILED_CLOSED");
     return stop("ENGINE_REJECTED", { accepted: false });
   }
-  if (dispatched?.accepted === true) {
+  if (dispatched && "accepted" in dispatched && dispatched.accepted === true) {
     const again = sliceABeforeDispatch(engine);
     if (!again.allow) return stop(again.reason, { accepted: false });
     if (isHostEngine(engine)) return stop("HOST_SPAWN_FORBIDDEN");

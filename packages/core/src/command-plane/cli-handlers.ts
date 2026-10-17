@@ -221,6 +221,7 @@ async function handleBrief(rest: string[]): Promise<CommandPlaneCliResult> {
   if (sub === "submit") {
     const { values, tokens } = parseArgs({
       args,
+      tokens: true,
       options: {
         cwd: { type: "string" },
         feature: { type: "string" },
@@ -235,7 +236,9 @@ async function handleBrief(rest: string[]): Promise<CommandPlaneCliResult> {
       return envelopeFail("INVALID_INPUT", "missing --feature, --outcome, or --deliverable");
     }
     const constraints = tokens
-      .filter((t) => t.name === "constraint")
+      .filter((t): t is Extract<(typeof tokens)[number], { kind: "option"; name: "constraint" }> =>
+        t.kind === "option" && t.name === "constraint",
+      )
       .map((t) => t.value)
       .filter((v): v is string => typeof v === "string");
     const result = await briefSubmit({
@@ -586,8 +589,8 @@ async function handleMailbox(rest: string[]): Promise<CommandPlaneCliResult> {
         toAgentId: values.to as string,
         kind: values.kind as "clarify" | "result" | "handoff" | "escalate",
         body: values.body as string,
-        relatedTaskId: values["related-task"] as string | undefined,
-        featureId: values.feature as string | undefined,
+        relatedTaskId: (values["related-task"] as string | undefined) ?? null,
+        featureId: (values.feature as string | undefined) ?? null,
       },
     });
     return envelope(result);

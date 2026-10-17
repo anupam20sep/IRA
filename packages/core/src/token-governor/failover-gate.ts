@@ -56,7 +56,7 @@ export async function reGateBeforeSpawn(
       ...ctx,
       engine: effectiveEngine,
       model: effectiveModel,
-    }),
+    } as DispatchContext & { engine: string; model: string | null }),
   );
 }
 

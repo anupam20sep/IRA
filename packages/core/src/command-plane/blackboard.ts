@@ -67,7 +67,7 @@ export async function blackboardUpdate<T>(
   });
 
   if (!locked.ok) {
-    return { ok: false, code: locked.code };
+    return { ok: false, code: "SCRIBE_BUSY" };
   }
   if (locked.value.ok === false) {
     return locked.value;

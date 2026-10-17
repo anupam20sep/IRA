@@ -10,7 +10,6 @@ import {
   PatternsListQuerySchema,
   PatternsListResponseSchema,
 } from "./schema.js";
-import type { z } from "zod";
 
 export const SUMMARY_PREVIEW_MAX_CHARS = 240;
 export const PATTERNS_STORE_UNREADABLE = "PATTERNS_STORE_UNREADABLE";

@@ -211,7 +211,7 @@ function tryJson(text: string): unknown | undefined {
 }
 
 /** Spawn or timeout only. A non-zero `ollama show` is a finished probe with no context. */
-function ollamaWasNotMeasured(err: NodeJS.ErrnoException & { killed?: boolean }): boolean {
+function ollamaWasNotMeasured(err: { code?: string | number | null; killed?: boolean }): boolean {
   if (err.code === "ENOENT" || err.code === "ETIMEDOUT") return true;
   return err.killed === true;
 }

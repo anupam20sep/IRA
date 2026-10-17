@@ -462,7 +462,7 @@ export function buildCommandPlaneMcpTools(): McpToolDef[] {
       handler: async (args) => {
         const ctx = await resolveHiveCtx(args.cwd as string | undefined);
         if (!ctx.ok) return cpJson(ctx);
-        const message = args.message as {
+        const raw = args.message as {
           toAgentId: string;
           kind: "clarify" | "result" | "handoff" | "escalate";
           body: string;
@@ -474,7 +474,13 @@ export function buildCommandPlaneMcpTools(): McpToolDef[] {
           role: args.role as "worker" | "ira",
           agentId: args.agentId as string,
           box: "outbox",
-          message,
+          message: {
+            toAgentId: raw.toAgentId,
+            kind: raw.kind,
+            body: raw.body,
+            relatedTaskId: raw.relatedTaskId ?? null,
+            featureId: raw.featureId ?? null,
+          },
         });
         return cpJson(result);
       },

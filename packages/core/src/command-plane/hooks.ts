@@ -117,15 +117,17 @@ export interface NormalizeEventInput {
   data?: Record<string, unknown>;
 }
 
-export interface EngineHooks {
-  detectInstalled?(): Promise<EnginePresence[]>;
-  dispatch?(intent: DispatchIntent): Promise<{ accepted: boolean } | null>;
-  normalizeEvent?(raw: NormalizeEventInput): Promise<IraEvent | null>;
-}
-
 export type EngineDispatchResult =
   | { accepted: boolean; reason?: typeof HOOK_FAILED_CLOSED }
+  | { ok: false; code: "SLICE_A_ONLY" }
+  | { ok: false; code: "HOST_SPAWN_FORBIDDEN" }
   | null;
+
+export interface EngineHooks {
+  detectInstalled?(): Promise<EnginePresence[]>;
+  dispatch?(intent: DispatchIntent): Promise<EngineDispatchResult>;
+  normalizeEvent?(raw: NormalizeEventInput): Promise<IraEvent | null>;
+}
 
 export type UntrustedImportResult = { askMeId: string } | { accepted: false } | null;
 
@@ -261,7 +263,7 @@ export async function safeOnUntrustedImport(
   log: HookEventLog = {},
 ): Promise<UntrustedImportResult> {
   const hook = registry.hire.onUntrustedImport;
-  return failClosed(
+  return failClosed<UntrustedImportResult>(
     "onUntrustedImport",
     { hiveRoot: log.hiveRoot, featureId: input.featureId },
     { accepted: false },
