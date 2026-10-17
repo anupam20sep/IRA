@@ -341,6 +341,7 @@ describe("dispatchTask", () => {
 
   it("stops when beforeDispatch denies and opens Ask-Me for a critical class", async () => {
     let engineCalled = false;
+    const repo = await readyRepo();
     registerCommandPlaneHooks({
       token: {
         beforeDispatch: async () => ({ allow: false, reasonClass: "budget_exceed", detail: "over cap" }),
@@ -352,7 +353,6 @@ describe("dispatchTask", () => {
         },
       },
     });
-    const repo = await readyRepo();
     const result = await dispatchTask({ featureId: FEATURE, taskId: "T001", cwd: repo.root });
     expect(result).toMatchObject({ ok: false, began: false });
     expect(engineCalled).toBe(false);
@@ -363,7 +363,8 @@ describe("dispatchTask", () => {
     expect((await readLedger(repo.hive)).tasks.find((task) => task.id === "T001")?.status).toBe("todo");
   });
 
-  it("treats a beforeDispatch throw as HOOK_FAILED_CLOSED", async () => {
+  it("treats a beforeDispatch throw as budget_exceed with Ask-Me", async () => {
+    const repo = await readyRepo();
     registerCommandPlaneHooks({
       token: {
         beforeDispatch: async () => {
@@ -371,12 +372,14 @@ describe("dispatchTask", () => {
         },
       },
     });
-    const repo = await readyRepo();
     const result = await dispatchTask({ featureId: FEATURE, taskId: "T001", cwd: repo.root });
-    expect(result).toMatchObject({ ok: false, code: "HOOK_FAILED_CLOSED", began: false });
+    expect(result).toMatchObject({ ok: false, code: "budget_exceed", began: false });
     expect(await loadState(repo.specDir)).toBeNull();
     const events = await readEvents(repo.hive);
     expect(events.some((event) => event.type === "hook.failed")).toBe(true);
+    const listed = await listAskMe({ hiveRoot: repo.hive, state: "open", featureId: FEATURE });
+    expect(listed.ok).toBe(true);
+    if (listed.ok) expect(listed.items.map((item) => item.reasonClass)).toContain("budget_exceed");
   });
 
   it("treats an engine dispatch throw as HOOK_FAILED_CLOSED", async () => {

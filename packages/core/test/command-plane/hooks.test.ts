@@ -66,7 +66,11 @@ describe("safeBeforeDispatch", () => {
       },
       brief: { budgetTokens: null, budgetUsd: null },
     });
-    expect(gate).toEqual({ allow: false, reason: "HOOK_FAILED_CLOSED" });
+    expect(gate).toEqual({
+      allow: false,
+      reasonClass: "budget_exceed",
+      detail: { hookFailed: true, reason: "HOOK_FAILED_CLOSED" },
+    });
   });
 
   it("allows dispatch when beforeDispatch is not registered", async () => {
@@ -107,7 +111,11 @@ describe("safeBeforeDispatch", () => {
       intent: intent(hiveRoot),
       brief: { budgetTokens: null, budgetUsd: null },
     });
-    expect(gate).toEqual({ allow: false, reason: "HOOK_FAILED_CLOSED" });
+    expect(gate).toEqual({
+      allow: false,
+      reasonClass: "budget_exceed",
+      detail: { hookFailed: true, reason: "HOOK_FAILED_CLOSED" },
+    });
     const event = await readHookFailed(hiveRoot);
     expect(event.type).toBe("hook.failed");
     expect(event.featureId).toBe("f");
@@ -128,7 +136,11 @@ describe("safeBeforeDispatch", () => {
       intent: intent(hiveRoot),
       brief: { budgetTokens: null, budgetUsd: null },
     });
-    expect(gate).toEqual({ allow: false, reason: "HOOK_FAILED_CLOSED" });
+    expect(gate).toEqual({
+      allow: false,
+      reasonClass: "budget_exceed",
+      detail: { hookFailed: true, reason: "HOOK_FAILED_CLOSED" },
+    });
     await expect(readFile(join(hiveRoot, "events", "events.jsonl"), "utf8")).rejects.toThrow();
   });
 });
@@ -300,7 +312,11 @@ describe("wrapped command-plane hooks", () => {
       intent: { ...intent(hiveRoot), featureId: "not a feature" },
       brief: { budgetTokens: null, budgetUsd: null },
     });
-    expect(gate).toEqual({ allow: false, reason: "HOOK_FAILED_CLOSED" });
+    expect(gate).toEqual({
+      allow: false,
+      reasonClass: "budget_exceed",
+      detail: { hookFailed: true, reason: "HOOK_FAILED_CLOSED" },
+    });
     const logged = await readHookFailed(hiveRoot);
     expect(logged.featureId).toBeNull();
     expect(logged.data).toEqual({ hook: "beforeDispatch", reason: "HOOK_FAILED_CLOSED" });

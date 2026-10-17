@@ -73,9 +73,18 @@ export interface DispatchContext {
   brief: { budgetTokens: number | null; budgetUsd: number | null };
 }
 
+export type TokenHookFailedDetail = { hookFailed: true; reason: typeof HOOK_FAILED_CLOSED };
+
+export type DispatchGateDetail = string | TokenHookFailedDetail;
+
 export type DispatchGate =
   | { allow: true }
-  | { allow: false; reasonClass: AskMeReasonClass; detail: string };
+  | { allow: false; reasonClass: AskMeReasonClass; detail: DispatchGateDetail };
+
+/** Ask-Me question text for a deny gate detail (string or hook-fail object). */
+export function formatDispatchGateDetail(detail: DispatchGateDetail): string {
+  return typeof detail === "string" ? detail : detail.reason;
+}
 
 export type HookFailClosed = { allow: false; reason: typeof HOOK_FAILED_CLOSED };
 
@@ -158,16 +167,38 @@ export function registerCommandPlaneHooks(partial: {
   if (partial.engine) registry.engine = partial.engine;
 }
 
-/** Missing `beforeDispatch` is skipped and allowed. A throw denies with `HOOK_FAILED_CLOSED`. */
-export async function safeBeforeDispatch(ctx: DispatchContext): Promise<SafeBeforeDispatchResult> {
+export function tokenBeforeDispatchHookDeny(): Extract<DispatchGate, { allow: false }> {
+  return {
+    allow: false,
+    reasonClass: "budget_exceed",
+    detail: { hookFailed: true, reason: HOOK_FAILED_CLOSED },
+  };
+}
+
+/**
+ * Test and boundary helper: run a token `beforeDispatch` body with OD-015 fail-closed mapping.
+ * Throws become a `budget_exceed` deny and do not propagate to MCP callers.
+ */
+export async function invokeTokenBeforeDispatchSafely(
+  hook: () => DispatchGate | Promise<DispatchGate>,
+): Promise<DispatchGate> {
+  try {
+    return await hook();
+  } catch {
+    return tokenBeforeDispatchHookDeny();
+  }
+}
+
+/** Missing `beforeDispatch` is skipped and allowed. A throw denies as `budget_exceed` (FR-026). */
+export async function safeBeforeDispatch(ctx: DispatchContext): Promise<DispatchGate> {
   const hook = registry.token.beforeDispatch;
-  return failClosed(
-    "beforeDispatch",
-    { hiveRoot: ctx.intent.hiveRoot, featureId: ctx.intent.featureId },
-    { allow: false, reason: HOOK_FAILED_CLOSED },
-    hook ? () => hook(ctx) : undefined,
-    { allow: true },
-  );
+  if (!hook) return { allow: true };
+  try {
+    return await hook(ctx);
+  } catch {
+    await recordHookFailed(ctx.intent.hiveRoot, ctx.intent.featureId, "beforeDispatch");
+    return tokenBeforeDispatchHookDeny();
+  }
 }
 
 /** Missing `dispatch` returns null (skipped). A throw denies with `HOOK_FAILED_CLOSED`. */

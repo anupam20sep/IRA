@@ -2,8 +2,9 @@ import { describe, it, expect, beforeEach, afterEach } from "vitest";
 import { access, chmod, mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { answerAskMe, listAskMe } from "../../src/command-plane/ask-me.js";
 import { briefSubmit } from "../../src/command-plane/brief.js";
-import { HOOK_FAILED_CLOSED, registerCommandPlaneHooks } from "../../src/command-plane/hooks.js";
+import { registerCommandPlaneHooks } from "../../src/command-plane/hooks.js";
 import { HiveLedgerSchema } from "../../src/command-plane/schema.js";
 import { runCli } from "../../src/cli.js";
 import { loadState } from "../../src/forge-loop.js";
@@ -159,8 +160,7 @@ describe("forge-hive integration", () => {
         beforeDispatch: async () => {
           order.push("beforeDispatch");
           if (gate.mode === "deny") {
-            // Fail-closed is outside DispatchGate and must not open Ask-Me.
-            return { allow: false, reason: HOOK_FAILED_CLOSED } as never;
+            throw new Error("token hook deny");
           }
           return { allow: true };
         },
@@ -176,9 +176,20 @@ describe("forge-hive integration", () => {
 
     const denied = await cli(["dispatch-task", "--cwd", root, "--feature", FEATURE, "--task", "T001"]);
     expect(denied.code).toBe(1);
-    expect(denied.body).toMatchObject({ ok: false, error: "HOOK_FAILED_CLOSED" });
+    expect(denied.body).toMatchObject({ ok: false, error: "budget_exceed" });
     expect(order).toEqual(["beforeDispatch"]);
     expect(await loadState(specDir)).toBeNull();
+    const openAskMe = await listAskMe({ hiveRoot: hive, state: "open", featureId: FEATURE });
+    expect(openAskMe.ok).toBe(true);
+    if (openAskMe.ok && openAskMe.items[0]) {
+      const answered = await answerAskMe({
+        hiveRoot: hive,
+        id: openAskMe.items[0].id,
+        text: "ack hook fail-closed",
+        action: "acknowledge",
+      });
+      expect(answered.ok).toBe(true);
+    }
 
     gate.mode = "reject";
     const rejected = await cli(["dispatch-task", "--cwd", root, "--feature", FEATURE, "--task", "T001"]);

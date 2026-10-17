@@ -15,9 +15,11 @@ import {
 } from "./dispatch-guard.js";
 import {
   HOOK_FAILED_CLOSED,
+  formatDispatchGateDetail,
   safeBeforeDispatch,
   safeEngineDispatch,
   safeMatchCapabilities,
+  type DispatchGateDetail,
   type DispatchIntent,
 } from "./hooks.js";
 import { resolveRepositoryRoot } from "./paths.js";
@@ -279,14 +281,8 @@ export async function dispatchTask(input: DispatchTaskInput): Promise<DispatchTa
   const brief = await readBriefBudgets(anchored.hiveRoot, input.featureId);
   const tokenGate = await safeBeforeDispatch({ intent, brief });
   if (!tokenGate.allow) {
-    if ("reason" in tokenGate && tokenGate.reason === HOOK_FAILED_CLOSED) {
-      return stop("HOOK_FAILED_CLOSED");
-    }
-    if ("reasonClass" in tokenGate) {
-      await openCriticalAskMe(anchored.hiveRoot, input.featureId, input.taskId, intent.agentId, tokenGate);
-      return stop(tokenGate.reasonClass, { reason: tokenGate.detail });
-    }
-    return stop("HOOK_FAILED_CLOSED");
+    await openCriticalAskMe(anchored.hiveRoot, input.featureId, input.taskId, intent.agentId, tokenGate);
+    return stop(tokenGate.reasonClass, { reason: formatDispatchGateDetail(tokenGate.detail) });
   }
 
   const dispatched = await safeEngineDispatch(intent);
@@ -481,10 +477,10 @@ async function openCriticalAskMe(
   featureId: string,
   taskId: string,
   agentId: string,
-  gate: { reasonClass: AskMeReasonClass; detail: string },
+  gate: { reasonClass: AskMeReasonClass; detail: DispatchGateDetail },
 ): Promise<void> {
   try {
-    const question = gate.detail.trim().slice(0, 4000);
+    const question = formatDispatchGateDetail(gate.detail).trim().slice(0, 4000);
     await openAskMeItem({
       hiveRoot,
       featureId,
