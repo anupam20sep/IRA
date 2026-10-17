@@ -2,25 +2,23 @@
 
 **Mode**: full  
 **Program**: Ira (Intelligent Resource Automation)  
-**Last updated**: 2026-10-16T23:10:00+05:30  
+**Last updated**: 2026-10-17T10:30:00+05:30  
 **Requirements source**: `docs/superspec/specs/2026-09-06-agent-command-plane-requirements.md`  
 **Architecture amendment (LOCKED)**: `docs/superspec/specs/ira-architecture-amendment-2026-10-16.md` — wins over conflicting design text
 
 Multi-spec workstream tracker for Ira. Each row is owned by the agent/human working that spec — edit only your row; re-read this file before updating.
 
-**Lifecycle**: P-002 validate **COMPLETE** — ready to ship. P-001 shipped; P-006 Slice A validated.  
+**Lifecycle**: Slice A **closed** (doctor four checks green incl. Ask-Me round-trip). Forging **P-003** learning memory.  
 **Model routing**: complex → Grok 4.7; otherwise → Composer.
 
-## Forge order (OD-020 Slice A)
+## Forge order (OD-020 Slice A) — COMPLETE
 
-Until doctor `sliceAValidated: true`, forge **only**:
+1. ~~**P-001** Command Plane~~ shipped
+2. ~~**P-006** host-delegate~~ Slice A validated (T022–T024 deferred)
+3. ~~**P-002** board Dispatch~~ shipped
+4. ~~Ask-Me create/list/answer round-trip~~ proven via `doctor.checks.askMeRoundTrip` + board answer path
 
-1. **P-001** Command Plane (hive, `dispatch-task`, hold/abort, locks, Ask-Me, away+CI gates)
-2. **P-006** host-delegate path only (`claude` / `codex` / `cursor-agent` → `null` + queue; no Ira-parent of hosts)
-3. **P-002** board Dispatch → `dispatch-task` + loopback token (OD-017)
-4. Ask-Me create/list/answer round-trip
-
-P-003 distill writes, P-004 spend/breaker side effects, P-005 hire spawn, and P-006 non-host supervisor spawn stay **no-op `SLICE_A_ONLY`** until Slice A validates.
+**Post–Slice A (unlocked):** P-003 distill writes, P-004 spend/breaker, P-005 hire, P-006 T022–T024 supervisor spawn — still gated per-command until a live hive reports `sliceAValidated: true`.
 
 ## Backlog
 
@@ -28,7 +26,7 @@ P-003 distill writes, P-004 spend/breaker side effects, P-005 hire spawn, and P-
 |----|---------|----------|-------|-------|-----------|-------|
 | P-001 | ira-command-plane | P1 | @composer | ship | specs/001-ira-command-plane | Shipped to anupam20sep/IRA; matrix clean, 390/390 tests |
 | P-002 | ira-command-center | P1 | @composer | ship | specs/002-ira-command-center | Shipped to origin/master @ d8c48a0; validate COMPLETE; 25/25; T025 signed |
-| P-003 | ira-learning-memory | P1 | @composer | route | specs/003-ira-learning-memory | Remediated; plan 21 tasks + map; lint OK; post–Slice A |
+| P-003 | ira-learning-memory | P1 | @composer | forge | specs/003-ira-learning-memory | Slice A closed; forge started W1 (T001/T002/T003/T005) |
 | P-004 | ira-token-context | P1 | @composer | route | specs/004-ira-token-context | Remediated; plan 24 tasks + map; lint OK; gate live in Slice A |
 | P-005 | ira-hire-gallery | P2 | @composer | route | specs/005-ira-hire-gallery | Remediated; plan 22 tasks + map; lint OK; spawn after Slice A |
 | P-006 | ira-engine-adapters | P2 | @composer | validate-slice-a | specs/006-ira-engine-adapters | Slice A validated 2026-10-16; 572 tests; T022–T024 deferred |
