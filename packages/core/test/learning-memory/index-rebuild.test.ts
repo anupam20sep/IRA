@@ -3,12 +3,13 @@ import { existsSync, writeFileSync } from "node:fs";
 import { mkdtemp, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
+import { openPatternIndexWithLoader } from "../../src/learning-memory/index-sqlite.js";
 import {
   openPatternIndex,
-  openPatternIndexWithLoader,
   reindexFromMarkdown,
-} from "../../src/learning-memory/index-sqlite.js";
-import { searchPatterns, upsertPattern } from "../../src/learning-memory/pattern-index.js";
+  searchPatterns,
+  upsertPattern,
+} from "../../src/learning-memory/pattern-index.js";
 import { writePatternAtomic } from "../../src/learning-memory/pattern-io.js";
 
 describe("reindexFromMarkdown", () => {
@@ -33,6 +34,8 @@ describe("reindexFromMarkdown", () => {
     const report = reindexFromMarkdown(patternsDir, indexPath, lockPath);
     expect(report.indexed).toBe(1);
     const db = openPatternIndex({ indexPath, lockPath });
+    expect(db.indexAvailable).toBe(true);
+    expect(db.index).not.toBeNull();
     const hits = db.search({ frTag: "FR-012", limit: 5 });
     expect(hits.some((h) => h.id === "pat_idx1")).toBe(true);
     const byText = db.search({ text: "lint plan", limit: 5 });
