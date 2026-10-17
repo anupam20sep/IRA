@@ -1,6 +1,6 @@
 # Status: 006-ira-engine-adapters
 
-**Last updated**: 2026-10-16T15:42:18.941Z
+**Last updated**: 2026-10-17T04:11:42.964Z
 **Tasks**: 21/24 done · 0 in progress · 0 blocked · 3 pending
 
 ## Functional requirements
@@ -67,3 +67,5 @@
 ## Notes
 
 This file is updated by `@superspec-dev/core sync-status` (or MCP `sync-status`) during forge. Commit it to share FR progress with your team.
+
+**Slice A (OD-020):** Validated 2026-10-16 — host-delegate path live (`claude` / `codex` / `cursor-agent` → `null` + queue; no Ira-parent host spawn). Tasks **T001–T021** done; **T022–T024** deferred until post–Slice A (detached supervisor spawn / full verification). FRs that still list those deferred tasks show 🔄 until T022–T024 forge. Program stage: `validate-slice-a`.
