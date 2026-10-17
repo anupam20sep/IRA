@@ -8,7 +8,7 @@
 
 Multi-spec workstream tracker for Ira. Each row is owned by the agent/human working that spec — edit only your row; re-read this file before updating.
 
-**Lifecycle**: Slice A **closed**. **P-003** learning memory validate **COMPLETE** — ready to ship.  
+**Lifecycle**: Slice A **closed**. **P-003** learning memory **shipped** (`9f72e08` → origin + ira). Next: **P-004** token-context (route → forge).  
 **Model routing**: complex → Grok 4.7; otherwise → Composer.
 
 ## Forge order (OD-020 Slice A) — COMPLETE
