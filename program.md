@@ -2,13 +2,13 @@
 
 **Mode**: full  
 **Program**: Ira (Intelligent Resource Automation)  
-**Last updated**: 2026-10-16T08:45:00+05:30  
+**Last updated**: 2026-10-16T23:10:00+05:30  
 **Requirements source**: `docs/superspec/specs/2026-09-06-agent-command-plane-requirements.md`  
 **Architecture amendment (LOCKED)**: `docs/superspec/specs/ira-architecture-amendment-2026-10-16.md` — wins over conflicting design text
 
 Multi-spec workstream tracker for Ira. Each row is owned by the agent/human working that spec — edit only your row; re-read this file before updating.
 
-**Lifecycle**: P-001 **shipped** to https://github.com/anupam20sep/IRA (2026-10-16). Next Slice A forge: P-006 host-delegate → P-002 board dispatch.  
+**Lifecycle**: P-002 validate **COMPLETE** — ready to ship. P-001 shipped; P-006 Slice A validated.  
 **Model routing**: complex → Grok 4.7; otherwise → Composer.
 
 ## Forge order (OD-020 Slice A)
@@ -27,11 +27,11 @@ P-003 distill writes, P-004 spend/breaker side effects, P-005 hire spawn, and P-
 | ID | Feature | Priority | Owner | Stage | Spec Path | Notes |
 |----|---------|----------|-------|-------|-----------|-------|
 | P-001 | ira-command-plane | P1 | @composer | ship | specs/001-ira-command-plane | Shipped to anupam20sep/IRA; matrix clean, 390/390 tests |
-| P-002 | ira-command-center | P1 | @composer | route | specs/002-ira-command-center | Remediated; plan 25 tasks + map; lint OK; **Slice A board dispatch** |
+| P-002 | ira-command-center | P1 | @composer | ship | specs/002-ira-command-center | Validate COMPLETE 2026-10-17; forge 25/25; 168 tests; T025 signed |
 | P-003 | ira-learning-memory | P1 | @composer | route | specs/003-ira-learning-memory | Remediated; plan 21 tasks + map; lint OK; post–Slice A |
 | P-004 | ira-token-context | P1 | @composer | route | specs/004-ira-token-context | Remediated; plan 24 tasks + map; lint OK; gate live in Slice A |
 | P-005 | ira-hire-gallery | P2 | @composer | route | specs/005-ira-hire-gallery | Remediated; plan 22 tasks + map; lint OK; spawn after Slice A |
-| P-006 | ira-engine-adapters | P2 | @composer | route | specs/006-ira-engine-adapters | Remediated; plan 24 tasks + map; lint OK; **host-delegate in Slice A** |
+| P-006 | ira-engine-adapters | P2 | @composer | validate-slice-a | specs/006-ira-engine-adapters | Slice A validated 2026-10-16; 572 tests; T022–T024 deferred |
 | P-007 | ira-integrations | P3 | @composer | deferred | specs/007-ira-integrations | INT-* Hermes/OpenClaw nice-to-have |
 
 ## Open Decisions
