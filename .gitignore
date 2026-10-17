@@ -4,6 +4,10 @@ dist/
 **/.superspec/state.json
 **/.superspec/coordinator.md
 **/.superspec/reports/
+.superspec/patterns/index.sqlite
+.superspec/patterns/index.sqlite-wal
+.superspec/patterns/index.sqlite-shm
+.superspec/patterns/.index.lock
 docs/superpowers/
 .superpowers/
 .claude/
