@@ -8,7 +8,7 @@
 
 Multi-spec workstream tracker for Ira. Each row is owned by the agent/human working that spec — edit only your row; re-read this file before updating.
 
-**Lifecycle**: Slice A **closed**. **P-003** learning memory **shipped** (`9f72e08` → origin + ira). Next: **P-004** token-context (route → forge).  
+**Lifecycle**: Slice A **closed**. **P-003** shipped. **P-004** token-context forge+validate **COMPLETE** (24/24; 88 LM-governor + 752 core).  
 **Model routing**: complex → Grok 4.7; otherwise → Composer.
 
 ## Forge order (OD-020 Slice A) — COMPLETE
@@ -26,8 +26,8 @@ Multi-spec workstream tracker for Ira. Each row is owned by the agent/human work
 |----|---------|----------|-------|-------|-----------|-------|
 | P-001 | ira-command-plane | P1 | @composer | ship | specs/001-ira-command-plane | Shipped to anupam20sep/IRA; matrix clean, 390/390 tests |
 | P-002 | ira-command-center | P1 | @composer | ship | specs/002-ira-command-center | Shipped to origin/master @ d8c48a0; validate COMPLETE; 25/25; T025 signed |
-| P-003 | ira-learning-memory | P1 | @composer | ship | specs/003-ira-learning-memory | Validate COMPLETE 2026-10-17; 21/21; 85/85 LM + 664 core |
-| P-004 | ira-token-context | P1 | @composer | route | specs/004-ira-token-context | Remediated; plan 24 tasks + map; lint OK; gate live in Slice A |
+| P-003 | ira-learning-memory | P1 | @composer | ship | specs/003-ira-learning-memory | Shipped origin+ira @ 41a75dc; 21/21; validate COMPLETE |
+| P-004 | ira-token-context | P1 | @composer | ship | specs/004-ira-token-context | Validate COMPLETE 2026-10-17; 24/24; 88 token-governor + 752 core |
 | P-005 | ira-hire-gallery | P2 | @composer | route | specs/005-ira-hire-gallery | Remediated; plan 22 tasks + map; lint OK; spawn after Slice A |
 | P-006 | ira-engine-adapters | P2 | @composer | validate-slice-a | specs/006-ira-engine-adapters | Slice A validated 2026-10-16; 572 tests; T022–T024 deferred |
 | P-007 | ira-integrations | P3 | @composer | deferred | specs/007-ira-integrations | INT-* Hermes/OpenClaw nice-to-have |
