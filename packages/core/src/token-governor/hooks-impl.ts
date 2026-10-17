@@ -51,6 +51,11 @@ export function registerTokenGovernor(hiveRoot: string): void {
   registerCommandPlaneHooks({ token: tokenHooksImpl });
 }
 
+/** Test and bootstrap helper: true after `registerTokenGovernor` bound a hive directory. */
+export function isTokenGovernorRegistered(): boolean {
+  return boundHiveRoot !== null;
+}
+
 export const tokenHooksImpl: TokenHooks = {
   async beforeDispatch(ctx) {
     return (await decide(ctx)) as DispatchGate;

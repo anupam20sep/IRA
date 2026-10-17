@@ -5,8 +5,15 @@ import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { ensureTokenLayout, tokenRoot } from "../../src/token-governor/paths.js";
 import { registerTokenGovernor, tokenHooksImpl } from "../../src/token-governor/hooks-impl.js";
+import { isTokenGovernorRegistered } from "../../src/token-governor/index.js";
 import { setBudget } from "../../src/token-governor/budgets.js";
 import { appendSpendEvent } from "../../src/token-governor/spend-ledger.js";
+
+describe("token registration", () => {
+  it("starts unregistered before hive bootstrap in unit test", () => {
+    expect(isTokenGovernorRegistered()).toBe(false);
+  });
+});
 
 describe("TokenHooks.beforeDispatch", () => {
   it("denies dispatch when remaining usd is zero after Slice A validates", async () => {

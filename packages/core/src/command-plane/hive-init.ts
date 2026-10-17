@@ -4,6 +4,7 @@ import { statSync } from "node:fs";
 import { personaField, type IraPersonaField } from "./persona.js";
 import { resolveRepositoryRoot } from "./paths.js";
 import { writeJsonAtomic } from "./store.js";
+import { bootstrapTokenGovernor } from "../token-governor/register.js";
 
 const GITIGNORE_LINE = ".superspec/hive/";
 
@@ -69,6 +70,7 @@ export async function hiveInit(input: { cwd: string; repair?: boolean }): Promis
   }
 
   await ensureGitignoreLine(repositoryRoot);
+  await bootstrapTokenGovernor(hiveRoot);
 
   return {
     ok: true,
