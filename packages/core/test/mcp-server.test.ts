@@ -43,6 +43,7 @@ describe("MCP tool definitions", () => {
         "mailbox-post",
         "mailbox-read",
         "next-task",
+        "patterns-list",
         "record-result",
         "roster-list",
         "route-model",

@@ -6,6 +6,15 @@ import { tmpdir } from "node:os";
 import { listPatterns } from "../../src/learning-memory/query.js";
 import { writePatternAtomic } from "../../src/learning-memory/pattern-io.js";
 import { reindexFromMarkdown } from "../../src/learning-memory/pattern-index.js";
+import { buildToolDefinitions } from "../../src/mcp-server.js";
+import { runCli } from "../../src/cli.js";
+
+async function invokeMcpTool(name: string, args: Record<string, unknown>): Promise<unknown> {
+  const tool = buildToolDefinitions().find((entry) => entry.name === name);
+  if (!tool) throw new Error(`unknown tool ${name}`);
+  const res = await tool.handler(args);
+  return JSON.parse(res.content[0]?.text ?? "{}");
+}
 
 const roots: string[] = [];
 
@@ -133,5 +142,36 @@ describe("listPatterns", () => {
     });
     expect(second.patterns).toHaveLength(1);
     expect(second.patterns[0]?.id).not.toBe(first.patterns[0]?.id);
+  });
+});
+
+describe("patterns-list MCP", () => {
+  it("returns JSON matching query module", async () => {
+    const seededRepo = await seedRepo();
+    const direct = await listPatterns({ projectRoot: seededRepo, limit: 5 });
+    const res = (await invokeMcpTool("patterns-list", { projectRoot: seededRepo, limit: 5 })) as Awaited<
+      ReturnType<typeof listPatterns>
+    >;
+    expect(res.patterns).toBeDefined();
+    expect(res).toEqual(direct);
+  });
+});
+
+describe("patterns CLI", () => {
+  it("patterns list emits the same JSON as listPatterns", async () => {
+    const seededRepo = await seedRepo();
+    const direct = await listPatterns({ projectRoot: seededRepo, frTag: "FR-012", limit: 5 });
+    const cli = await runCli([
+      "patterns",
+      "list",
+      "--project-root",
+      seededRepo,
+      "--fr-tag",
+      "FR-012",
+      "--limit",
+      "5",
+    ]);
+    expect(cli.code).toBe(0);
+    expect(JSON.parse(cli.stdout)).toEqual(direct);
   });
 });

@@ -59,6 +59,9 @@ import {
   runCommandPlaneCli,
 } from "./command-plane/cli-handlers.js";
 import { priorPatternsForTask, routeModelWithLearning, scheduleRecordResultLearning } from "./learning-memory/forge-wiring.js";
+import { listPatterns, showPattern } from "./learning-memory/query.js";
+import { reindexFromMarkdown } from "./learning-memory/pattern-index.js";
+import { resolvePatternStoreRoot } from "./learning-memory/paths.js";
 import type { Complexity, TaskKind } from "./types.js";
 import type { HarnessId } from "./harness-model-map.js";
 import type { RouteRole } from "./model-router.js";
@@ -611,9 +614,91 @@ async function runCliInner(argv: string[], options?: RunCliOptions): Promise<Cli
     return runRouteModelCli(rest);
   }
 
+  if (command === "patterns") {
+    return runPatternsCli(rest);
+  }
+
   return {
     code: 0,
-    stdout: `Unknown command: ${command ?? "(none)"}. Try: init | matrix | lint | scaffold | list-personas | coordinator-init | coordinator-brief | next-task | begin-task | record-result | route-model | sync-status | forge-status | ${commandPlaneHelpSummary()} | mcp`,
+    stdout: `Unknown command: ${command ?? "(none)"}. Try: init | matrix | lint | scaffold | list-personas | patterns | coordinator-init | coordinator-brief | next-task | begin-task | record-result | route-model | sync-status | forge-status | ${commandPlaneHelpSummary()} | mcp`,
+  };
+}
+
+async function runPatternsCli(rest: string[]): Promise<CliResult> {
+  const sub = rest[0];
+  const projectRootDefault = process.cwd();
+
+  if (sub === "list") {
+    const { values } = parseArgs({
+      args: rest.slice(1),
+      options: {
+        "project-root": { type: "string", default: projectRootDefault },
+        feature: { type: "string" },
+        "fr-tag": { type: "string" },
+        kind: { type: "string" },
+        limit: { type: "string" },
+        cursor: { type: "string" },
+      },
+    });
+    try {
+      const payload = await listPatterns({
+        projectRoot: values["project-root"] as string,
+        ...(values.feature !== undefined ? { featureId: values.feature as string } : {}),
+        ...(values["fr-tag"] !== undefined ? { frTag: values["fr-tag"] as string } : {}),
+        ...(values.kind !== undefined ? { kind: values.kind as "success" | "failure" | "routing" } : {}),
+        ...(values.limit !== undefined ? { limit: Number(values.limit) } : {}),
+        ...(values.cursor !== undefined ? { cursor: values.cursor as string } : {}),
+      });
+      return { code: 0, stdout: JSON.stringify(payload, null, 2) };
+    } catch (err) {
+      return { code: 0, stdout: `Error: ${err instanceof Error ? err.message : String(err)}` };
+    }
+  }
+
+  if (sub === "show") {
+    const { values } = parseArgs({
+      args: rest.slice(1),
+      options: {
+        "project-root": { type: "string", default: projectRootDefault },
+        id: { type: "string" },
+      },
+    });
+    if (values.id === undefined) {
+      return { code: 0, stdout: "Error: missing required argument --id" };
+    }
+    try {
+      const payload = await showPattern({
+        projectRoot: values["project-root"] as string,
+        id: values.id as string,
+      });
+      return { code: 0, stdout: JSON.stringify(payload, null, 2) };
+    } catch (err) {
+      return { code: 0, stdout: `Error: ${err instanceof Error ? err.message : String(err)}` };
+    }
+  }
+
+  if (sub === "reindex") {
+    const { values } = parseArgs({
+      args: rest.slice(1),
+      options: {
+        "project-root": { type: "string", default: projectRootDefault },
+      },
+    });
+    const store = resolvePatternStoreRoot(values["project-root"] as string);
+    if (!store.ok) {
+      return { code: 0, stdout: JSON.stringify({ error: store.code, message: store.message }, null, 2) };
+    }
+    try {
+      const report = reindexFromMarkdown(store.patternsDir, store.indexPath, store.lockPath);
+      return { code: 0, stdout: JSON.stringify(report, null, 2) };
+    } catch (err) {
+      return { code: 0, stdout: `Error: ${err instanceof Error ? err.message : String(err)}` };
+    }
+  }
+
+  return {
+    code: 0,
+    stdout: "Unknown patterns subcommand. Try: patterns list | patterns show | patterns reindex",
   };
 }
 

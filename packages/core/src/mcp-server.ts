@@ -15,6 +15,8 @@ import {
   routeModelWithLearning,
   scheduleRecordResultLearning,
 } from "./learning-memory/forge-wiring.js";
+import { listPatterns } from "./learning-memory/query.js";
+import { PatternKindSchema } from "./learning-memory/schema.js";
 import type { Complexity, TaskKind } from "./types.js";
 import type { RouteRole } from "./model-router.js";
 import { type HarnessId } from "./harness-model-map.js";
@@ -459,6 +461,20 @@ export function buildToolDefinitions(): ToolDef[] {
           return { content: [{ type: "text", text: formatCommandError("forge-status", err) }] };
         }
       },
+    },
+    {
+      name: "patterns-list",
+      description:
+        "Read-only list of learning-memory patterns for a repository. Same JSON shape as superspec patterns list.",
+      schema: {
+        projectRoot: z.string().min(1),
+        featureId: z.string().optional(),
+        frTag: z.string().optional(),
+        kind: PatternKindSchema.optional(),
+        limit: z.number().int().min(1).max(100).optional(),
+        cursor: z.string().nullable().optional(),
+      },
+      handler: async (args) => json(await listPatterns(args)),
     },
     {
       name: "list-personas",

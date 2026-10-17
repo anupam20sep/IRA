@@ -1,9 +1,15 @@
 import { join } from "node:path";
+import { z } from "zod";
 import { listPatternMarkdownFiles, readPatternFile, type PatternRecord } from "./pattern-io.js";
-import { resolvePatternStoreRoot } from "./paths.js";
+import { assertSafePatternId, resolvePatternStoreRoot } from "./paths.js";
 import { openPatternIndex, searchPatterns, type PatternIndex } from "./pattern-index.js";
 import { MARKDOWN_SCAN_MAX_FILES } from "./retrieve.js";
-import { PatternsListQuerySchema, PatternsListResponseSchema } from "./schema.js";
+import {
+  PatternFrontmatterSchema,
+  PatternRecordSchema,
+  PatternsListQuerySchema,
+  PatternsListResponseSchema,
+} from "./schema.js";
 import type { z } from "zod";
 
 export const SUMMARY_PREVIEW_MAX_CHARS = 240;
@@ -17,6 +23,31 @@ type PatternListItem = PatternsListResponse["patterns"][number];
  * Read-only list/search for MCP and CLI (FR-012). Uses SQLite when available;
  * otherwise a capped markdown scan. Never throws for an empty or unreadable store.
  */
+const PatternsShowQuerySchema = z.object({
+  projectRoot: z.string().min(1),
+  id: PatternFrontmatterSchema.shape.id,
+});
+
+export type PatternsShowResponse = {
+  pattern: z.infer<typeof PatternRecordSchema> | null;
+  warnings?: string[];
+};
+
+export async function showPattern(rawQuery: unknown): Promise<PatternsShowResponse> {
+  const query = PatternsShowQuerySchema.parse(rawQuery);
+  const store = resolvePatternStoreRoot(query.projectRoot);
+  if (!store.ok) {
+    return { pattern: null, warnings: [store.code] };
+  }
+  assertSafePatternId(query.id);
+  try {
+    const record = await readPatternFile(join(store.patternsDir, `${query.id}.md`));
+    return { pattern: PatternRecordSchema.parse(record) };
+  } catch {
+    return { pattern: null };
+  }
+}
+
 export async function listPatterns(rawQuery: unknown): Promise<PatternsListResponse> {
   const query = PatternsListQuerySchema.parse(rawQuery);
   const store = resolvePatternStoreRoot(query.projectRoot);
