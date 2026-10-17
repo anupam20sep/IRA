@@ -23,6 +23,7 @@ import {
   type DoctorFinding as EngineDoctorFinding,
   summarizePostSliceARungs,
 } from "../engines/doctor-findings.js";
+import { integrationDoctorFindings } from "../integrations/doctor-findings.js";
 
 const GITIGNORE_LINE = ".superspec/hive/";
 const REQUIRED_MCP_TOOLS = ["hive-init", "dispatch-task", "doctor"] as const;
@@ -211,11 +212,13 @@ export async function runDoctor(input: RunDoctorInput = {}): Promise<DoctorRepor
     );
   }
 
-  const [collectedEngineFindings, hostDispatchQueuesIntent, askMeRoundTrip] = await Promise.all([
-    hiveRoot ? collectEngineDoctorFindings(hiveRoot) : Promise.resolve([]),
-    probeHostDispatch(),
-    probeAskMeRoundTrip(),
-  ]);
+  const [collectedEngineFindings, integrationFindings, hostDispatchQueuesIntent, askMeRoundTrip] =
+    await Promise.all([
+      hiveRoot ? collectEngineDoctorFindings(hiveRoot) : Promise.resolve([]),
+      hiveRoot ? integrationDoctorFindings(hiveRoot) : Promise.resolve([]),
+      probeHostDispatch(),
+      probeAskMeRoundTrip(),
+    ]);
   const engineFindings = (input.engineFindings ?? collectedEngineFindings).map((item) => ({ ...item }));
   const boardDispatchInvokesDispatchTask = boardDispatchCheck();
   if (!hostDispatchQueuesIntent && !engineFindings.some((item) => item.code === "ENGINE_NONE_HEALTHY")) {
@@ -262,7 +265,7 @@ export async function runDoctor(input: RunDoctorInput = {}): Promise<DoctorRepor
     sandboxed: sandbox.sandboxed,
     superspecRootOverride: readSuperspecRootOverride(cwd),
     mcpTools,
-    findings: [...hiveFindings, ...engineFindings, ...warnings],
+    findings: [...hiveFindings, ...engineFindings, ...integrationFindings, ...warnings],
     nextSteps: buildNextSteps({ cli, hiveRoot, autonomy }),
     telemetry,
     persona: personaField(),
