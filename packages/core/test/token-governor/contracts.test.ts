@@ -9,6 +9,9 @@ import {
   tokenSpendQueryHandler,
 } from "../../src/token-governor/mcp-handlers.js";
 import { buildToolDefinitions } from "../../src/mcp-server.js";
+import { routeModel } from "../../src/model-router.js";
+
+const VALID_TIERS = ["economy", "standard", "frontier"] as const;
 
 describe("token MCP surface", () => {
   it("registers eleven token-* tool names", () => {
@@ -66,6 +69,54 @@ describe("buildTokenMcpTools", () => {
       error: "HIVE_NOT_INITIALIZED",
     });
     expect(payload.hint).toContain("doctor");
+  });
+});
+
+describe("route-model core unchanged", () => {
+  it("returns only economy for mechanical attempt 1", () => {
+    expect(routeModel({ complexity: "mechanical", attempt: 1 }).tier).toBe("economy");
+  });
+});
+
+describe("route-model MCP quota fields", () => {
+  it("includes quotaApplied and overrideApplied booleans with no fourth tier", async () => {
+    const tool = buildToolDefinitions().find((t) => t.name === "route-model")!;
+    const res = await tool.handler({ complexity: "mechanical", attempt: 1 });
+    const payload = JSON.parse(res.content[0].text);
+    expect(VALID_TIERS).toContain(payload.tier);
+    expect(payload.quotaApplied).toBe(false);
+    expect(payload.overrideApplied).toBe(false);
+    expect(payload.routingHint).toBeUndefined();
+  });
+
+  it("sets routingHint when quotaRemainingPercent is below threshold", async () => {
+    const tool = buildToolDefinitions().find((t) => t.name === "route-model")!;
+    const res = await tool.handler({
+      complexity: "moderate",
+      attempt: 1,
+      quotaRemainingPercent: 5,
+      lowQuotaPercent: 20,
+    });
+    const payload = JSON.parse(res.content[0].text);
+    expect(VALID_TIERS).toContain(payload.tier);
+    expect(payload.quotaApplied).toBe(true);
+    expect(payload.routingHint).toMatchObject({
+      preferredTier: "economy",
+      reason: "low_quota",
+    });
+  });
+
+  it("applies operatorOverrideTier without introducing a fourth tier", async () => {
+    const tool = buildToolDefinitions().find((t) => t.name === "route-model")!;
+    const res = await tool.handler({
+      complexity: "mechanical",
+      attempt: 1,
+      operatorOverrideTier: "frontier",
+    });
+    const payload = JSON.parse(res.content[0].text);
+    expect(payload.tier).toBe("frontier");
+    expect(payload.overrideApplied).toBe(true);
+    expect(VALID_TIERS).toContain(payload.tier);
   });
 });
 

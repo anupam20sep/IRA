@@ -18,7 +18,9 @@ import {
 import { listPatterns } from "./learning-memory/query.js";
 import { PatternKindSchema } from "./learning-memory/schema.js";
 import type { Complexity, TaskKind } from "./types.js";
-import type { RouteRole } from "./model-router.js";
+import { routeModel, type ModelTier, type RouteRole } from "./model-router.js";
+import { resolveDispatchModel } from "./models-config.js";
+import { buildRouteModelResponse } from "./token-governor/routing-hints.js";
 import { type HarnessId } from "./harness-model-map.js";
 import { scaffold } from "./scaffold.js";
 import { initState, forgeStatus, nextTask, recordResult, loadState, saveState, markInProgress, reconcileState } from "./forge-loop.js";
@@ -118,20 +120,74 @@ export function buildToolDefinitions(): ToolDef[] {
         planText: z.string().optional(),
         implementsFr: z.array(z.string()).optional(),
         featureId: z.string().optional(),
+        quotaRemainingPercent: z.number().min(0).max(100).optional(),
+        lowQuotaPercent: z.number().min(0).max(100).optional(),
+        operatorOverrideTier: z.enum(["economy", "standard", "frontier"]).optional(),
       },
       handler: async (args) => {
-        const payload = await routeModelWithLearning({
-          complexity: args.complexity as Complexity,
-          role: args.role as RouteRole | undefined,
-          attempt: args.attempt as number | undefined,
-          kind: args.kind as TaskKind | undefined,
-          harness: args.harness as HarnessId | undefined,
-          projectRoot: args.projectRoot as string | undefined,
+        const complexity = args.complexity as Complexity;
+        const role = args.role as RouteRole | undefined;
+        const attempt = args.attempt as number | undefined;
+        const kind = args.kind as TaskKind | undefined;
+        const harness = args.harness as HarnessId | undefined;
+        const projectRoot = args.projectRoot as string | undefined;
+
+        const governor = buildRouteModelResponse({
+          complexity,
+          role,
+          attempt,
+          kind,
+          quotaRemainingPercent: args.quotaRemainingPercent as number | undefined,
+          settings:
+            args.lowQuotaPercent !== undefined
+              ? { lowQuotaPercent: args.lowQuotaPercent as number }
+              : undefined,
+          operatorOverrideTier: args.operatorOverrideTier as ModelTier | undefined,
+        });
+
+        let payload: Record<string, unknown> = await routeModelWithLearning({
+          complexity,
+          role,
+          attempt,
+          kind,
+          harness,
+          projectRoot,
           taskId: args.taskId as string | undefined,
           planText: args.planText as string | undefined,
           implementsFr: args.implementsFr as string[] | undefined,
           featureId: args.featureId as string | undefined,
         });
+
+        payload = {
+          ...payload,
+          tier: governor.tier,
+          routingHint: governor.routingHint,
+          quotaApplied: governor.quotaApplied,
+          overrideApplied: governor.overrideApplied,
+        };
+
+        if (governor.overrideApplied) {
+          const routed = routeModel({ complexity, role, attempt, kind });
+          const resolved = await resolveDispatchModel({
+            tier: governor.tier,
+            role: routed.role,
+            kind,
+            attempt: routed.attempt,
+            harness,
+            projectRoot,
+          });
+          payload = {
+            ...payload,
+            model: governor.tier === "economy" ? "fast" : "strong",
+            harness: resolved.harness,
+            slug: resolved.slug,
+            thinkingHint: resolved.thinkingHint,
+            examples: resolved.examples,
+            source: resolved.source,
+            configPath: resolved.configPath,
+          };
+        }
+
         return json(payload);
       },
     },
