@@ -8,7 +8,7 @@
 
 Multi-spec workstream tracker for Ira. Each row is owned by the agent/human working that spec — edit only your row; re-read this file before updating.
 
-**Lifecycle**: Slice A **closed**. **P-005** and **P-006** shipped (post–Slice A supervisor complete).  
+**Lifecycle**: Slice A **closed**. P-001–P-006 shipped. Forging **P-007** integrations (activated from deferred).  
 **Model routing**: complex → Grok 4.7; otherwise → Composer.
 
 ## Forge order (OD-020 Slice A) — COMPLETE
@@ -18,7 +18,7 @@ Multi-spec workstream tracker for Ira. Each row is owned by the agent/human work
 3. ~~**P-002** board Dispatch~~ shipped
 4. ~~Ask-Me create/list/answer round-trip~~ proven via `doctor.checks.askMeRoundTrip` + board answer path
 
-**Post–Slice A:** P-003–P-006 complete on live hive (`sliceAValidated: true`). Remaining backlog: P-007 integrations (deferred).
+**Post–Slice A:** P-003–P-006 complete. **P-007** integrations activated (nice-to-have INT-*); forge in progress.
 
 ## Backlog
 
@@ -30,7 +30,7 @@ Multi-spec workstream tracker for Ira. Each row is owned by the agent/human work
 | P-004 | ira-token-context | P1 | @composer | ship | specs/004-ira-token-context | Validate COMPLETE 2026-10-17; 24/24; 88 token-governor + 752 core |
 | P-005 | ira-hire-gallery | P2 | @composer | ship | specs/005-ira-hire-gallery | Shipped ira/master; forge 22/22; validate COMPLETE; tsc clean; hire 88/88 + core 840/840 |
 | P-006 | ira-engine-adapters | P2 | @composer | ship | specs/006-ira-engine-adapters | Shipped ira/master; forge 24/24; validate COMPLETE; engines 195 + core 853; tsc clean |
-| P-007 | ira-integrations | P3 | @composer | deferred | specs/007-ira-integrations | INT-* Hermes/OpenClaw nice-to-have |
+| P-007 | ira-integrations | P3 | @composer | forge | specs/007-ira-integrations | Activated; plan T001–T011; optional adapters disabled-by-default |
 
 ## Open Decisions
 
