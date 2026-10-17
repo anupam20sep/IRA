@@ -50,9 +50,12 @@ function deriveFrStatus(frId: string, tasks: Task[], state: ForgeState): FrStatu
   if (covering.length === 0) return "pending";
 
   const statuses = covering.map((t) => state.tasks[t.id]?.status ?? "pending");
-  if (statuses.some((s) => s === "blocked")) return "blocked";
-  if (statuses.every((s) => s === "done")) return "done";
-  if (statuses.some((s) => s === "done" || s === "in_progress")) return "in_progress";
+  // Intentionally deferred tasks are `blocked`. They must not keep an FR
+  // "in progress" when every remaining covering task is done (Slice A / staged forge).
+  const active = statuses.filter((s) => s !== "blocked");
+  if (active.length === 0) return "blocked";
+  if (active.every((s) => s === "done")) return "done";
+  if (active.some((s) => s === "done" || s === "in_progress")) return "in_progress";
   return "pending";
 }
 

@@ -39,6 +39,28 @@ describe("fr status", () => {
     expect(snap.frRows.find((r) => r.fr === "FR-001")?.status).toBe("in_progress");
   });
 
+  it("marks FR done when remaining covering tasks are blocked (deferred)", () => {
+    const multi: Task[] = [
+      { id: "T001", title: "slice-a", frRefs: ["FR-001"], dependsOn: [], complexity: "mechanical", kind: "code" },
+      { id: "T002", title: "deferred", frRefs: ["FR-001"], dependsOn: ["T001"], complexity: "mechanical", kind: "code" },
+    ];
+    const multiPlan = `
+### Task T001: slice-a
+**Implements:** FR-001
+**Depends on:** none
+
+### Task T002: deferred
+**Implements:** FR-001
+**Depends on:** T001
+`;
+    const state = initState(multi);
+    recordResult(state, "T001", true, { maxReviewFailures: 3 });
+    state.tasks.T002 = { status: "blocked", reviewFailures: 0 };
+    const snap = buildStatusSnapshot(specText, multiPlan, state, "slice-a");
+    expect(snap.frRows.find((r) => r.fr === "FR-001")?.status).toBe("done");
+    expect(snap.taskRows.find((r) => r.id === "T002")?.status).toBe("blocked");
+  });
+
   it("renders status markdown with FR table", () => {
     const state = initState(tasks);
     const md = renderStatusMarkdown(buildStatusSnapshot(specText, planText, state, "demo"));
