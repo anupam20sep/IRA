@@ -33,3 +33,8 @@ export function tagsIntersect(taskTags: string[], agentTags: string[]): string[]
   const agentSet = new Set(normalizeCapabilityTags(agentTags));
   return normalizeCapabilityTags(taskTags).filter((tag) => agentSet.has(tag));
 }
+
+/** How many normalized capability tags the task and agent share. */
+export function capabilityOverlap(taskTags: string[], agentTags: string[]): number {
+  return tagsIntersect(taskTags, agentTags).length;
+}
