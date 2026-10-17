@@ -1,7 +1,7 @@
 # Status: 006-ira-engine-adapters
 
-**Last updated**: 2026-10-17T04:13:48.366Z
-**Tasks**: 21/24 done · 0 in progress · 3 blocked · 0 pending
+**Last updated**: 2026-10-17T16:30:20.042Z
+**Tasks**: 24/24 done · 0 in progress · 0 blocked · 0 pending
 
 ## Functional requirements
 
@@ -60,12 +60,10 @@
 | T019 | done | FR-021, FR-018, FR-025 | Register EngineHooks at startup (hook fail-closed) |
 | T020 | done | FR-023, FR-024, FR-027, FR-008, FR-006 | Slice A integration — host null, queue, SLICE_A_ONLY |
 | T021 | done | FR-002, FR-009, FR-016, FR-021, FR-023, FR-027 | Slice A verification gate |
-| T022 | blocked | FR-024, FR-025, FR-010, FR-022 | Detached supervisor CLI and live child spawn |
-| T023 | blocked | FR-024, FR-026, FR-004, FR-010 | Post–Slice A integration — detached pid and scrubbed env |
-| T024 | blocked | FR-001, FR-027 | Full P-006 verification gate |
+| T022 | done | FR-024, FR-025, FR-010, FR-022 | Detached supervisor CLI and live child spawn |
+| T023 | done | FR-024, FR-026, FR-004, FR-010 | Post–Slice A integration — detached pid and scrubbed env |
+| T024 | done | FR-001, FR-027 | Full P-006 verification gate |
 
 ## Notes
 
 This file is updated by `@superspec-dev/core sync-status` (or MCP `sync-status`) during forge. Commit it to share FR progress with your team.
-
-**Slice A (OD-020):** Validated 2026-10-16 — host-delegate path live (`claude` / `codex` / `cursor-agent` → `null` + queue; no Ira-parent host spawn). Tasks **T001–T021** done; **T022–T024** marked **blocked** (intentionally deferred post–Slice A: detached supervisor spawn / full verification). FRs covered by done Slice A tasks report ✅ even when a deferred task remains on the matrix. Program stage: `validate-slice-a`.

@@ -8,17 +8,17 @@
 
 Multi-spec workstream tracker for Ira. Each row is owned by the agent/human working that spec — edit only your row; re-read this file before updating.
 
-**Lifecycle**: Slice A **closed** (`sliceAValidated: true` on live hive). **P-005** shipped. Forging **P-006** post–Slice A T022–T024 (detached supervisor).  
+**Lifecycle**: Slice A **closed**. **P-005** and **P-006** shipped (post–Slice A supervisor complete).  
 **Model routing**: complex → Grok 4.7; otherwise → Composer.
 
 ## Forge order (OD-020 Slice A) — COMPLETE
 
 1. ~~**P-001** Command Plane~~ shipped
-2. ~~**P-006** host-delegate~~ Slice A validated (T022–T024 deferred)
+2. ~~**P-006** host-delegate + post–Slice A supervisor~~ shipped
 3. ~~**P-002** board Dispatch~~ shipped
 4. ~~Ask-Me create/list/answer round-trip~~ proven via `doctor.checks.askMeRoundTrip` + board answer path
 
-**Post–Slice A (unlocked):** P-003 distill writes, P-004 spend/breaker, P-005 hire, P-006 T022–T024 supervisor spawn — still gated per-command until a live hive reports `sliceAValidated: true`.
+**Post–Slice A:** P-003–P-006 complete on live hive (`sliceAValidated: true`). Remaining backlog: P-007 integrations (deferred).
 
 ## Backlog
 
@@ -29,7 +29,7 @@ Multi-spec workstream tracker for Ira. Each row is owned by the agent/human work
 | P-003 | ira-learning-memory | P1 | @composer | ship | specs/003-ira-learning-memory | Shipped origin+ira @ 41a75dc; 21/21; validate COMPLETE |
 | P-004 | ira-token-context | P1 | @composer | ship | specs/004-ira-token-context | Validate COMPLETE 2026-10-17; 24/24; 88 token-governor + 752 core |
 | P-005 | ira-hire-gallery | P2 | @composer | ship | specs/005-ira-hire-gallery | Shipped ira/master; forge 22/22; validate COMPLETE; tsc clean; hire 88/88 + core 840/840 |
-| P-006 | ira-engine-adapters | P2 | @composer | forge | specs/006-ira-engine-adapters | Slice A done; doctor sliceAValidated=true; forging T022–T024 supervisor spawn |
+| P-006 | ira-engine-adapters | P2 | @composer | ship | specs/006-ira-engine-adapters | Shipped ira/master; forge 24/24; validate COMPLETE; engines 195 + core 853; tsc clean |
 | P-007 | ira-integrations | P3 | @composer | deferred | specs/007-ira-integrations | INT-* Hermes/OpenClaw nice-to-have |
 
 ## Open Decisions
