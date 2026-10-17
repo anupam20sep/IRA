@@ -27,7 +27,7 @@ P-003 distill writes, P-004 spend/breaker side effects, P-005 hire spawn, and P-
 | ID | Feature | Priority | Owner | Stage | Spec Path | Notes |
 |----|---------|----------|-------|-------|-----------|-------|
 | P-001 | ira-command-plane | P1 | @composer | ship | specs/001-ira-command-plane | Shipped to anupam20sep/IRA; matrix clean, 390/390 tests |
-| P-002 | ira-command-center | P1 | @composer | ship | specs/002-ira-command-center | Validate COMPLETE 2026-10-17; forge 25/25; 168 tests; T025 signed |
+| P-002 | ira-command-center | P1 | @composer | ship | specs/002-ira-command-center | Shipped to origin/master @ d8c48a0; validate COMPLETE; 25/25; T025 signed |
 | P-003 | ira-learning-memory | P1 | @composer | route | specs/003-ira-learning-memory | Remediated; plan 21 tasks + map; lint OK; post–Slice A |
 | P-004 | ira-token-context | P1 | @composer | route | specs/004-ira-token-context | Remediated; plan 24 tasks + map; lint OK; gate live in Slice A |
 | P-005 | ira-hire-gallery | P2 | @composer | route | specs/005-ira-hire-gallery | Remediated; plan 22 tasks + map; lint OK; spawn after Slice A |
