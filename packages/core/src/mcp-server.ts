@@ -56,6 +56,7 @@ import { bootstrapEngineHooksFromCwd, isDirectRun } from "./cli-entry.js";
 import { buildCommandPlaneMcpTools } from "./command-plane/mcp-command-plane-tools.js";
 import { buildEnginesMcpTools } from "./engines/mcp-handlers.js";
 import { buildTokenMcpTools } from "./token-governor/mcp-handlers.js";
+import { buildHireMcpTools, wrapAskMeAnswerWithHire } from "./hire/mcp-handlers.js";
 
 interface ToolContent {
   content: { type: "text"; text: string }[];
@@ -558,7 +559,12 @@ export function buildToolDefinitions(): ToolDef[] {
           }),
         ),
     },
-    ...(buildCommandPlaneMcpTools() as ToolDef[]),
+    ...(buildCommandPlaneMcpTools().map((tool) =>
+      tool.name === "ask-me-answer"
+        ? { ...tool, handler: wrapAskMeAnswerWithHire(tool.handler) }
+        : tool,
+    ) as ToolDef[]),
+    ...(buildHireMcpTools() as ToolDef[]),
     ...(buildEnginesMcpTools() as ToolDef[]),
     ...(buildTokenMcpTools() as ToolDef[]),
   ];
