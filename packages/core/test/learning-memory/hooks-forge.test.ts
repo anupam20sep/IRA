@@ -1,11 +1,16 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { mkdtemp, readdir, rm, writeFile, mkdir } from "node:fs/promises";
+import { mkdtemp, readdir, readFile, rm, writeFile, mkdir } from "node:fs/promises";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { z } from "zod";
 import { runCli } from "../../src/cli.js";
 import { buildToolDefinitions } from "../../src/mcp-server.js";
-import { loadState } from "../../src/forge-loop.js";
+import { initState, loadState, saveState } from "../../src/forge-loop.js";
+import { DEFAULT_LEARNING_CONFIG } from "../../src/learning-memory/config.js";
+import { distillPattern } from "../../src/learning-memory/distill.js";
+import { resolvePatternStoreRoot } from "../../src/learning-memory/paths.js";
+import { listPatterns } from "../../src/learning-memory/query.js";
+import type { Task } from "../../src/types.js";
 import * as installMod from "../../src/learning-memory/install.js";
 import { writePatternAtomic } from "../../src/learning-memory/pattern-io.js";
 import * as pipeline from "../../src/learning-memory/pipeline.js";
@@ -240,6 +245,47 @@ describe("forge learning hooks", () => {
   });
 });
 
+describe("pattern store survives forge state compaction", () => {
+  it("retains patterns after ten state re-inits", async () => {
+    const repo = await bareRepo();
+    const tasks: Task[] = [
+      {
+        id: "T001",
+        title: "Wire forge",
+        frRefs: ["FR-006"],
+        dependsOn: [],
+        complexity: "moderate",
+        kind: "code",
+      },
+    ];
+    const stateFile = join(repo.specDir, ".superspec", "state.json");
+    const before = await countPatternMarkdown(repo.root);
+
+    const distilled = await distillOnePattern(repo.specDir, { sliceAValidated: true });
+    expect(distilled.repositoryRoot).toBe(repo.root);
+    expect(distilled.patternsDir).toBe(join(repo.root, ".superspec", "patterns"));
+    expect(distilled.patternsDir.startsWith(repo.specDir)).toBe(false);
+
+    const written = await countPatternMarkdown(repo.root);
+    expect(written).toBe(before + 1);
+    const snapshot = await snapshotPatternMarkdown(distilled.patternsDir);
+
+    for (let i = 0; i < 10; i++) {
+      await rm(stateFile, { force: true });
+      await saveState(repo.specDir, initState(tasks));
+    }
+
+    expect(await countPatternMarkdown(repo.root)).toBe(written);
+    expect(await snapshotPatternMarkdown(distilled.patternsDir)).toEqual(snapshot);
+    const listed = await listPatterns({ projectRoot: repo.root, limit: 10 });
+    expect(listed.patterns.length).toBeGreaterThan(0);
+    expect(listed.patterns.length).toBe(written);
+    expect(listed.patterns.map((pattern) => pattern.id)).toContain(distilled.patternId);
+    expect(await loadState(repo.specDir)).toEqual(initState(tasks));
+    expect(await readdir(join(repo.specDir, ".superspec"))).toEqual(["state.json"]);
+  });
+});
+
 describe("OD-016 record-result isolation", () => {
   it("does not change exit code when background distill throws", async () => {
     let specDir = "";
@@ -382,6 +428,57 @@ async function withDoctorSnapshot(
   } finally {
     spy.mockRestore();
   }
+}
+
+/** Distill one pattern into the store resolved from the spec directory. */
+async function distillOnePattern(
+  specDir: string,
+  opts: { sliceAValidated: boolean },
+): Promise<{ patternId: string; patternsDir: string; repositoryRoot: string }> {
+  const store = resolvePatternStoreRoot(specDir);
+  if (!store.ok) throw new Error(store.message);
+  const opened = openPatternIndex({
+    indexPath: store.indexPath,
+    lockPath: store.lockPath,
+  });
+  try {
+    const result = await distillPattern(
+      {
+        featureId: "003-demo",
+        taskId: "T001",
+        passed: true,
+        reviewFailures: 0,
+        kind: "code",
+        implementsFr: ["FR-006"],
+      },
+      {
+        patternsDir: store.patternsDir,
+        index: opened.index,
+        indexAvailable: opened.indexAvailable,
+        sliceAValidated: opts.sliceAValidated,
+      },
+      DEFAULT_LEARNING_CONFIG,
+    );
+    if (!result.written || !result.patternId) {
+      throw new Error(`distill did not write a pattern: ${result.skipReason ?? "unknown"}`);
+    }
+    return {
+      patternId: result.patternId,
+      patternsDir: store.patternsDir,
+      repositoryRoot: store.repositoryRoot,
+    };
+  } finally {
+    opened.close();
+  }
+}
+
+async function snapshotPatternMarkdown(patternsDir: string): Promise<Record<string, string>> {
+  const names = (await readdir(patternsDir)).filter((name) => name.endsWith(".md")).sort();
+  const bodies: Record<string, string> = {};
+  for (const name of names) {
+    bodies[name] = await readFile(join(patternsDir, name), "utf8");
+  }
+  return bodies;
 }
 
 async function countPatternMarkdown(repoRoot: string): Promise<number> {
