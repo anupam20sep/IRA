@@ -87,7 +87,11 @@ async function storeAskMeId(hiveRoot: string, reviewId: string, askMeId: string)
 export type AskMeHireResult =
   | { ok: true; code: "HIRE_ACK_CANCELS" }
   | { ok: true; state: "pending" }
-  | { ok: false; code: CommandPlaneErrorCode | "HIRE_REVIEW_NOT_FOUND"; message: string };
+  | {
+      ok: false;
+      code: CommandPlaneErrorCode | "HIRE_REVIEW_NOT_FOUND" | "HIRE_REVIEW_LOCKED" | "HIRE_INVALID_TRANSITION";
+      message: string;
+    };
 
 export type HandleUntrustedImportAskMeAnswerInput = {
   hiveRoot: string;

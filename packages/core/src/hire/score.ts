@@ -28,7 +28,8 @@ export type HireScoreComputeInput = {
   demotionThreshold?: number;
 };
 
-export type HireScoreSignals = HireScoreComputeInput & {
+/** Incremental updates may omit passRate/reviewFailures when taskOutcome is provided. */
+export type HireScoreSignals = Partial<HireScoreComputeInput> & {
   taskOutcome?: { passed: boolean; reviewFailures?: number };
 };
 
