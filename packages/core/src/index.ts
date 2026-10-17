@@ -70,3 +70,17 @@ export {
   tokenHooksImpl,
 } from "./token-governor/index.js";
 export type * from "./token-governor/types.js";
+export {
+  bootstrapHire,
+  getHireAskMeAnswerDelegate,
+  hireHooksImpl,
+} from "./hire/index.js";
+export type {
+  HireAskMeAnswerDelegateInput,
+  HireAskMeAnswerDelegateResult,
+} from "./hire/index.js";
+export { hireImport } from "./hire/import.js";
+export type {
+  HireImportRequest,
+  HireImportResponse,
+} from "./hire/import.js";
