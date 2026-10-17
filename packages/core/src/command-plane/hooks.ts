@@ -232,6 +232,25 @@ export async function safeOnRecordResult(ctx: DistillContext, log: HookEventLog 
   );
 }
 
+/**
+ * P-001 record-result order: `LearningHooks.distill`, then `TokenHooks.onRecordResult`.
+ * A distill throw stays inside this boundary so compact still runs.
+ */
+export async function runRecordResultHooksForTest(
+  ctx: DistillContext,
+  log: HookEventLog = {},
+): Promise<void> {
+  const distill = registry.learning.distill;
+  if (distill) {
+    try {
+      await distill(ctx);
+    } catch {
+      // OD-015: learning-hook failure must not skip compact or escape to the caller.
+    }
+  }
+  await safeOnRecordResult(ctx, log);
+}
+
 export async function safeOnUntrustedImport(
   input: { featureId: string | null; agentId: string | null; detail: string },
   log: HookEventLog = {},
