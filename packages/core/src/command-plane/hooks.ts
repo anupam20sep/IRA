@@ -167,6 +167,11 @@ export function registerCommandPlaneHooks(partial: {
   if (partial.engine) registry.engine = partial.engine;
 }
 
+/** Test and bootstrap helper: current hire hook slice after registration. */
+export function getRegisteredHireHooks(): HireHooks {
+  return registry.hire;
+}
+
 export function tokenBeforeDispatchHookDeny(): Extract<DispatchGate, { allow: false }> {
   return {
     allow: false,

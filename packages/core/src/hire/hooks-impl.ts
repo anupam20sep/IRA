@@ -1,4 +1,16 @@
+import type { HireHooks } from "../command-plane/hooks.js";
+import type { RosterAgent } from "../command-plane/types.js";
+import { openUntrustedImportAskMe } from "./ask-me-bridge.js";
 import { capabilityOverlap, normalizeCapabilityTags } from "./capabilities.js";
+
+const REVIEW_ID_RE = /^hrv_[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+let boundHiveRoot: string | null = null;
+
+/** Bind hive root for `onUntrustedImport` when invoked without hive in the hook input. */
+export function bindHireHiveRoot(hiveRoot: string | null): void {
+  boundHiveRoot = hiveRoot;
+}
 
 /** Roster row plus the optional hire score used as a routing tie-break. */
 export type CapabilityRosterAgent = {
@@ -54,3 +66,37 @@ function recordedScore(agent: CapabilityRosterAgent): number | null {
   const score = agent.hireScore?.score;
   return typeof score === "number" && Number.isFinite(score) ? score : null;
 }
+
+function parseReviewIdFromDetail(detail: string): string | null {
+  const trimmed = detail.trim();
+  if (REVIEW_ID_RE.test(trimmed)) return trimmed;
+  const token = trimmed.split(/\s+/).find((part) => REVIEW_ID_RE.test(part));
+  return token && REVIEW_ID_RE.test(token) ? token : null;
+}
+
+function sourceSummaryFromDetail(detail: string, reviewId: string): string {
+  const prefix = `Untrusted hire import ${reviewId} from `;
+  if (detail.startsWith(prefix)) return detail.slice(prefix.length).trim() || detail;
+  return detail.trim() || "unknown source";
+}
+
+export const hireHooksImpl: HireHooks = {
+  matchCapabilities(task, roster) {
+    return matchCapabilities(task, roster as readonly CapabilityRosterAgent[]) as RosterAgent | null;
+  },
+  async onUntrustedImport(input) {
+    const hiveRoot = boundHiveRoot;
+    if (!hiveRoot) {
+      throw new Error("Hire hive root is not bound for onUntrustedImport.");
+    }
+    const reviewId = parseReviewIdFromDetail(input.detail);
+    if (!reviewId) {
+      throw new Error("Hire review id is missing from untrusted import detail.");
+    }
+    return openUntrustedImportAskMe({
+      hiveRoot,
+      reviewId,
+      sourceSummary: sourceSummaryFromDetail(input.detail, reviewId),
+    });
+  },
+};

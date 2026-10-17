@@ -9,6 +9,7 @@ import { lintPlan } from "./plan-lint.js";
 import { lintDesign, lintDesignText } from "./design-lint.js";
 import { lintSpec } from "./spec-lint.js";
 import { resolveRepositoryRoot } from "./command-plane/paths.js";
+import { bootstrapHire } from "./hire/index.js";
 import { installLearningMemory } from "./learning-memory/install.js";
 import {
   priorPatternsForTask,
@@ -581,7 +582,12 @@ export function createServer(): McpServer {
 export async function runMcpServer(): Promise<void> {
   bootstrapEngineHooksFromCwd();
   const resolved = resolveRepositoryRoot(process.cwd());
-  if (resolved.ok) installLearningMemory({ projectRoot: resolved.repositoryRoot });
+  if (resolved.ok) {
+    installLearningMemory({ projectRoot: resolved.repositoryRoot });
+    bootstrapHire(resolved.hiveRoot);
+  } else {
+    bootstrapHire(null);
+  }
   const server = createServer();
   const transport = new StdioServerTransport();
   await server.connect(transport);

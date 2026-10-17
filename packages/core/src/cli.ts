@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+import "./hire/index.js";
 import { readFile } from "node:fs/promises";
 import { stdin } from "node:process";
 import { parseArgs } from "node:util";
