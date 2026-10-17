@@ -12,6 +12,11 @@ import {
 } from "../command-plane/store.js";
 import { HIRE_TRUST_BANNER } from "./constants.js";
 import { HireReviewSchema } from "./schema.js";
+import {
+  allowedSkillsAfterConsent,
+  mergeSkillConsentDecisions,
+  type SkillConsentUpdate,
+} from "./skills.js";
 import type {
   ApprovalCopyVariant,
   HireManifest,
@@ -66,6 +71,53 @@ export type HireReviewPatch = {
   sourceKind?: HireSourceKind;
   sourceRef?: string;
 };
+
+export type ReviewOperatorEdits = {
+  displayName?: string;
+  goal?: string;
+  capabilityTags?: string[];
+  engine?: string;
+  modelTier?: string;
+  budgetUsd?: number | null;
+  budgetTokens?: number | null;
+  allowedSkills?: string[];
+  allowedMcp?: string[];
+};
+
+export type ApplyReviewEditsOptions = {
+  hiveRoot: string;
+  skillConsents?: SkillConsentUpdate[];
+};
+
+export async function applyReviewEdits(
+  reviewId: string,
+  edits: ReviewOperatorEdits,
+  options: ApplyReviewEditsOptions,
+): Promise<HireReview> {
+  const current = await loadReview(options.hiveRoot, reviewId);
+  if (!current) {
+    throw new HireReviewError("HIRE_REVIEW_NOT_FOUND", `Hire review ${reviewId} was not found.`);
+  }
+
+  let nextConsents = current.skillConsents;
+  if (options.skillConsents !== undefined && options.skillConsents.length > 0) {
+    nextConsents = mergeSkillConsentDecisions(current.skillConsents, options.skillConsents);
+  }
+
+  const mergedEdits: Record<string, unknown> = {
+    ...(current.operatorEdits ?? {}),
+    ...edits,
+  };
+
+  if (Array.isArray(mergedEdits.allowedSkills)) {
+    mergedEdits.allowedSkills = allowedSkillsAfterConsent(mergedEdits.allowedSkills as string[], nextConsents);
+  }
+
+  return updateReview(options.hiveRoot, reviewId, {
+    operatorEdits: mergedEdits,
+    skillConsents: nextConsents,
+  });
+}
 
 export async function createPendingReview(input: CreatePendingReviewInput): Promise<HireReview> {
   const now = new Date().toISOString();
