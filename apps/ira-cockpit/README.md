@@ -1,14 +1,28 @@
-# Ira Command Cockpit
+# IRA — Intelligent Resource Automation
 
-Glass-Tech **GOD-mode** desktop app for Ira — project-first command surface over SuperSpec hive, Cursor/Claude/Codex engines, Ask-Me, and agents/skills.
+**IRA** is your GOD-mode chief of staff for a one-person company: project-first command, multi-engine teams (Cursor / Claude / Codex / OpenCode), Ask-Me gates, and delivery stages — in a Glass-Tech desktop cockpit.
 
-Stack: **Tauri 2 + React 19 + Vite**, live backend at `/api/ira/*`.
+This app is the **IRA product surface**. The monorepo engine underneath powers hive, doctor, dispatch, and personas; you run and think in **IRA**, not in a separate lifecycle brand.
 
-| Doc | Purpose |
-|-----|---------|
-| **This README** | Install, production, usage tutorial |
-| [DEV_PLAN.md](./DEV_PLAN.md) | Feature / substrate map |
-| [INSTALL.md](./INSTALL.md) | Short pointer (kept for links) |
+| | |
+|--|--|
+| **App** | Tauri 2 + React 19 + Vite |
+| **API** | `/api/ira/*` (live backend) |
+| **UI** | http://127.0.0.1:1420 + native `Ira.app` |
+
+Related: [DEV_PLAN.md](./DEV_PLAN.md) · [INSTALL.md](./INSTALL.md)
+
+---
+
+## What IRA does
+
+- **Projects** — local repo roots you onboard; each may contain many features/specs
+- **Team** — agents and skills on disk (Cursor `.md`, Claude, Codex, OpenCode)
+- **Engines** — detect host CLIs; queue work to Cursor/Claude/Codex (never Ira-parent host engines)
+- **Ask-Me** — critical decisions paused for you
+- **Stages** — delivery progress for features inside a project
+- **Docs** — search specs, design, plans, patterns on disk
+- **Voice** — optional STT/TTS on the omni prompt
 
 ---
 
@@ -16,118 +30,105 @@ Stack: **Tauri 2 + React 19 + Vite**, live backend at `/api/ira/*`.
 
 | Tool | Notes |
 |------|--------|
-| **Node.js 20+** | Frontend + Vite API |
-| **pnpm** | Monorepo package manager |
-| **Rust (rustup)** | Tauri desktop builds |
-| **SuperSpec CLI** | `packages/core` in this monorepo |
-| **cursor-agent** (optional) | Host engine — [install](https://cursor.com/docs/cli/installation) |
+| Node.js 20+ | UI + API |
+| pnpm | Workspace installs |
+| Rust (rustup) | Desktop (Tauri) |
+| IRA engine CLI | Built from `packages/core` in this repo |
+| `cursor-agent` (optional) | [Install Cursor CLI](https://cursor.com/docs/cli/installation) |
 
-macOS is the primary desktop target (`.app` / `.dmg`).
+Primary desktop target: **macOS** (`.app` / `.dmg`).
 
 ---
 
-## Quick install
+## Install
 
-From the **monorepo root** (`superspec/`):
+From the **repo root**:
 
 ```bash
-# One-shot install (deps + core CLI + config sync)
 ./apps/ira-cockpit/scripts/install.sh
-
-# Start desktop + web (http://127.0.0.1:1420)
 ./apps/ira-cockpit/scripts/dev.sh
-# browser-only:
-./apps/ira-cockpit/scripts/dev.sh web
 ```
 
-Or via pnpm:
+Or:
 
 ```bash
 pnpm --filter ira-cockpit install:local
-pnpm --filter ira-cockpit start          # tauri:dev
-pnpm --filter ira-cockpit start:web      # vite only
+pnpm --filter ira-cockpit start        # desktop + http://127.0.0.1:1420
+pnpm --filter ira-cockpit start:web    # browser only
 ```
 
-### Cursor Agent CLI (recommended)
+### Cursor Agent (recommended)
 
 ```bash
 curl https://cursor.com/install -fsS | bash
 echo 'export PATH="$HOME/.local/bin:$PATH"' >> ~/.zshrc && source ~/.zshrc
-agent --version    # or: cursor-agent --version
+agent --version
 agent login
 ```
 
 ---
 
-## Production build
+## Production
 
 ```bash
 ./apps/ira-cockpit/scripts/build-production.sh
-# or
-pnpm --filter ira-cockpit prod:build
+# or: pnpm --filter ira-cockpit prod:build
 ```
 
-Outputs under:
+Artifacts:
 
 ```text
-apps/ira-cockpit/src-tauri/target/release/bundle/
-  macos/Ira.app
-  dmg/…               # when DMG target built
+apps/ira-cockpit/src-tauri/target/release/bundle/macos/Ira.app
+apps/ira-cockpit/src-tauri/target/release/bundle/dmg/   # when produced
 ```
-
-Open the app:
 
 ```bash
 open apps/ira-cockpit/src-tauri/target/release/bundle/macos/Ira.app
 ```
 
-Set secrets **only** in the environment (never commit):
+Secrets via env only (never commit):
 
 ```bash
 export VITE_IRA_ELEVENLABS_API_KEY=…
 export VITE_IRA_OPENAI_API_KEY=…
-export SUPERSPEC_BIN=/absolute/path/to/packages/core/dist/cli.js
+export SUPERSPEC_BIN=/absolute/path/to/packages/core/dist/cli.js   # IRA engine binary
 ```
 
 ---
 
-## Scripts reference
+## Scripts
 
-| Script | Command | What it does |
-|--------|---------|----------------|
-| Install | `./scripts/install.sh` / `pnpm install:local` | pnpm install, build core CLI, sync config |
-| Dev (desktop) | `./scripts/dev.sh` / `pnpm start` | Tauri + Vite HMR |
-| Dev (web) | `./scripts/dev.sh web` / `pnpm start:web` | Vite only on `:1420` |
-| Production | `./scripts/build-production.sh` / `pnpm prod:build` | `tsc` + Vite + Tauri release |
-| Sync config | `./scripts/sync-config.sh` / `pnpm sync:config` | `ira.config.json` → `public/` |
-| Verify | `./scripts/verify.sh` / `pnpm verify` | unit + staging + engine probe |
-
-Tests:
+| Action | Script / pnpm |
+|--------|----------------|
+| Install | `./scripts/install.sh` · `pnpm install:local` |
+| Dev (desktop) | `./scripts/dev.sh` · `pnpm start` |
+| Dev (web) | `./scripts/dev.sh web` · `pnpm start:web` |
+| Production | `./scripts/build-production.sh` · `pnpm prod:build` |
+| Sync config | `./scripts/sync-config.sh` · `pnpm sync:config` |
+| Verify | `./scripts/verify.sh` · `pnpm verify` |
 
 ```bash
-pnpm --filter ira-cockpit test            # unit / module
-pnpm --filter ira-cockpit test:staging    # live HTTP (staging-style)
-pnpm --filter ira-cockpit test:url-shortener
+pnpm --filter ira-cockpit test
+pnpm --filter ira-cockpit test:staging
 ```
 
 ---
 
-## Configuration
+## Configure projects
 
-Edit `ira.config.json` (and run `pnpm sync:config`):
+Edit `ira.config.json`, then `pnpm sync:config`:
 
 ```json
 {
   "projects": [
     {
-      "id": "url-shortener",
-      "name": "URL Shortener",
+      "id": "my-app",
+      "name": "My App",
       "path": "/absolute/path/to/repo"
     }
   ],
   "engines": {
-    "prefer": ["cursor-agent", "claude", "codex", "opencode"],
-    "superspecBin": "packages/core/dist/cli.js"
+    "prefer": ["cursor-agent", "claude", "codex", "opencode"]
   },
   "voice": {
     "enabled": true,
@@ -137,135 +138,110 @@ Edit `ira.config.json` (and run `pnpm sync:config`):
 }
 ```
 
-A **project** is a local repository root. Specs live under `specs/<feature>/` inside that repo — they are not separate projects.
+A **project** = one local repository. Features under `specs/<id>/` nest **inside** that project.
 
 ---
 
 ## Usage tutorial
 
-### 1. Start Ira
+### 1. Launch IRA
 
 ```bash
 ./apps/ira-cockpit/scripts/dev.sh
 ```
 
-Open **http://127.0.0.1:1420/** or the native window. Status line should show **LIVE · N projects**.
+Open the native window or **http://127.0.0.1:1420/**.  
+Status should read **LIVE · N projects**. Use **Refresh** if it still says Connecting….
 
-Click **Refresh** if the line says Connecting… — you should see a timestamp and hive status.
+### 2. Onboard a repo
 
-### 2. Onboard a project
+1. **Setup → Onboard**
+2. Paste an absolute path that exists on disk
+3. Optional name → **Onboard project**
 
-1. Go to **Setup**
-2. Under **Onboard**, paste an absolute path to a repo (must exist on disk)
-3. Optional display name → **Onboard project**
-4. Ira writes `ira.config.json` and opens the project in the nav
+Included examples:
 
-Example fixtures already registered:
+| Project | Path |
+|---------|------|
+| URL Shortener | `fixtures/url-shortener` |
+| Demo Shop | `fixtures/demo-shop` |
 
-- **URL Shortener** — `fixtures/url-shortener`
-- **Demo Shop** — `fixtures/demo-shop`
-- **SuperSpec** — monorepo root
+### 3. Work a project
 
-### 3. Explore a project
+Open it from the nav:
 
-From the nav, open a project. Use lenses:
+| Lens | Purpose |
+|------|---------|
+| Pulse | Progress, blockers, spend |
+| Team | Agents on this project |
+| Stages | Feature delivery stages |
+| Docs | Search specs / docs / patterns |
+| Ask-Me | Decisions waiting on you |
 
-| Lens | Use |
-|------|-----|
-| **Pulse** | Progress, spend, blockers |
-| **Team** | Agents on the project |
-| **Stages** | SuperSpec delivery stage per feature |
-| **Docs** | Live FS search (`specs/`, `docs/`, patterns) |
-| **Ask-Me** | Pending operator gates |
-| **Setup** (global) | Agents, skills, engines, voice, onboard |
+### 4. Hire the team (agents & skills)
 
-### 4. Add Cursor / Claude agents
+**Setup → Add agent** — pick harness (`cursor` / `claude` / `codex` / `opencode`), write persona file under the active project.
 
-**Setup → Add agent**
+**Setup → Add skill** — writes `skills/<id>/SKILL.md`.
 
-1. Choose harness (`cursor`, `claude`, `codex`, `opencode`)
-2. Fill id / role / tags / body
-3. **Write agent file** → creates e.g. `.cursor/agents/<id>.md` in the **active project** root
-
-Skills: **Setup → Add skill** → `skills/<id>/SKILL.md`.
-
-### 5. Check engines (Cursor Agent)
+### 5. Engines
 
 **Setup → Engines → Re-detect**
 
-You want `cursor-agent` = **installed**, badge **host-spawn**.
+- `cursor-agent` / `claude` / `codex` → **host-spawn** (IRA queues; host runs the CLI)
+- `opencode` → detachable when the engine rung is ready
 
-Ira **queues** work for Cursor; it does **not** start `cursor-agent` as a child (OD-009). Host Cursor session / CLI picks up the intent.
+### 6. Send work toward Cursor
 
-### 6. Walk SuperSpec stages (example)
+IRA queues a host intent (does not spawn Cursor itself):
 
-Against the URL Shortener fixture, Ira can advance lifecycle status via API (used by staging tests):
+- API: `POST /api/ira/cursor/dispatch`
+- File: `.superspec/hive/dispatch-queue/<feature>/<task>.json` under the project
 
-```bash
-# Smoke the live stack
-pnpm --filter ira-cockpit test:staging
-```
-
-In the UI, open **URL Shortener → Stages** after Refresh — features under `specs/` appear nested under that project.
-
-### 7. Dispatch to Cursor (intent queue)
-
-From tooling / API (Setup will grow a button over time):
-
-- `POST /api/ira/cursor/dispatch` with `projectId`, `featureId`, `taskId`
-- Writes `.superspec/hive/dispatch-queue/<feature>/<task>.json`
-- Engine field is `cursor-agent`, `freshSubagent: true`
-
-Then run Cursor Agent on the project folder (host):
+On the host:
 
 ```bash
 cd /path/to/your/project
 agent
 ```
 
-### 8. Voice (optional)
+### 7. Voice (optional)
 
-Omni-prompt mic uses `ira.config.json` → `voice`. Default is browser **webspeech**. For ElevenLabs / OpenAI TTS/STT, set env keys before `pnpm start`.
+Mic on the omni prompt. Default: browser webspeech. Set ElevenLabs / OpenAI keys in the environment for other providers.
 
 ---
 
-## Architecture (short)
+## How it fits together
 
 ```text
-Browser / Tauri webview
-        │  fetch /api/ira/*
-        ▼
-Vite middleware  →  src/backend/*  →  SuperSpec CLI (SUPERSPEC_BIN)
-        │                              hive / personas / doctor
-        ▼
-Zustand store (refreshLive every 15s + Refresh button)
+You  ←→  IRA Cockpit (this app)
+              │
+              ├─ projects, team, Ask-Me, stages, docs
+              ├─ /api/ira/* live backend
+              └─ IRA engine (packages/core) — hive, doctor, personas, dispatch queue
+                        │
+                        └─ host engines: Cursor · Claude · Codex (queue only)
 ```
-
-Host engines (`claude`, `cursor-agent`, `codex`) = **queue only**.  
-`opencode` may detach when engine rung is ready.
 
 ---
 
 ## Troubleshooting
 
-| Symptom | Fix |
-|---------|-----|
-| Refresh does nothing / Connecting… | Ensure Vite is on `127.0.0.1:1420`; run `./scripts/dev.sh`; check status line for errors |
-| `cursor-agent` missing | Install CLI + `PATH="$HOME/.local/bin:$PATH"` |
-| Hive down | From project: `SUPERSPEC_ROOT=/path/to/project node packages/core/dist/cli.js hive init` |
-| Port 1420 in use | `./scripts/dev.sh` kills stale listeners; or `lsof -tiTCP:1420 \| xargs kill` |
-| Production build fails | `rustup update stable`; Xcode CLT on macOS |
+| Issue | Fix |
+|-------|-----|
+| Not LIVE | `./scripts/dev.sh`; confirm http://127.0.0.1:1420 |
+| No `cursor-agent` | Install CLI; add `~/.local/bin` to `PATH` |
+| Hive down | `SUPERSPEC_ROOT=/path/to/project node packages/core/dist/cli.js hive init` |
+| Port 1420 busy | `./scripts/dev.sh` clears it, or kill the listener |
+| Prod build fails | `rustup update stable`; macOS Xcode CLT |
 
 ---
 
-## Example projects
+## Examples & tests
 
 ```bash
-# URL Shortener app tests
 cd apps/ira-cockpit/fixtures/url-shortener && node --test tests/*.test.js
-
-# Ira + shortener staging
 pnpm --filter ira-cockpit test:staging
 ```
 
-See fixture `README.md` files under `fixtures/` for Cursor agent lists.
+Fixture READMEs under `fixtures/` list sample Cursor agents.

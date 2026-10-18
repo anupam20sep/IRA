@@ -1,17 +1,17 @@
-# Ira — install pointer
+# IRA — install
 
-Full **installation**, **production build**, and **usage tutorial** live in:
+This product is **IRA** (Intelligent Resource Automation).
+
+Full **install**, **production**, and **usage tutorial**:
 
 → **[README.md](./README.md)**
 
-## TL;DR
-
 ```bash
-# from monorepo root
+# from repo root
 ./apps/ira-cockpit/scripts/install.sh
 ./apps/ira-cockpit/scripts/dev.sh
 
-# production desktop bundle
+# production desktop
 ./apps/ira-cockpit/scripts/build-production.sh
 ```
 

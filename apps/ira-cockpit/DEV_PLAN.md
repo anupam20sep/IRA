@@ -1,6 +1,6 @@
-# Ira Cockpit — Engineering Dev Plan
+# IRA Cockpit — Engineering Dev Plan
 
-**No SuperSpec lifecycle.** Build against shipped substrate (P-001–P-007) + this Tauri app.
+**Product: IRA** (Intelligent Resource Automation). Engine packages in-repo power hive/dispatch; the cockpit is the product surface.
 
 ## Status (2026-10-18)
 
