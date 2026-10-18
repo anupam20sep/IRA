@@ -1,0 +1,71 @@
+# SuperSpec model routing (OPTIONAL) — forge-focused
+#
+# Copy to .superspec/models.yaml to activate, or run:
+#   npx -y @superspec-dev/core init --root . --mode lite --with-models
+#
+# Planning stages (explore→route): pick the model yourself at run time.
+# This file drives forge implementer/reviewer routing only.
+#
+# Each leaf may be:
+#   - a scalar string (same slug for every harness), or
+#   - a harness map: { cursor: …, claude: …, codex: … }
+# Missing/blank map keys fall through. Resolution order:
+#   kinds → attempts → roles → tiers → built-in harness map
+# Pass harness + projectRoot to route-model so the correct map entry is used.
+# Do NOT copy model names into plan.md or execution-map.md.
+
+harness: cursor   # fallback when route-model omits harness
+
+# Capability tiers (mechanical→economy, moderate→standard, complex→frontier)
+tiers:
+  economy:
+    claude: haiku
+    cursor: composer-2
+    codex: gpt-5.4
+  standard:
+    claude: sonnet
+    cursor: composer-2.5
+    codex: gpt-5.5
+  frontier:
+    claude: opus
+    cursor: frontier-high
+    codex: gpt-5.5-high
+
+thinking:
+  economy: minimal
+  standard: medium
+  frontier: high
+
+# Forge roles (null = use tiers / builtin)
+roles:
+  implementer:
+    claude: claude-sonnet-4-6
+    cursor: composer-2.5
+    codex: gpt-5.5
+  reviewer:
+    claude: claude-sonnet-4-6
+    cursor: composer-2.5
+    codex: gpt-5.5
+
+# Task kinds (null = fall through to role/tier)
+kinds:
+  code: null
+  verify:
+    claude: sonnet
+    cursor: composer-2.5
+    codex: gpt-5.5
+  provision: null
+  signoff: null
+  doc-sync: null
+
+# Review-failure ladder (attempt number as string key)
+attempts:
+  "1": null
+  "2":
+    claude: sonnet
+    cursor: composer-2.5
+    codex: gpt-5.5
+  "3":
+    claude: opus
+    cursor: frontier-high
+    codex: gpt-5.5-high

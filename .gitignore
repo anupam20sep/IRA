@@ -12,3 +12,7 @@ docs/superpowers/
 .superpowers/
 .claude/
 .cursor/
+# Keep example project Cursor agents in Ira fixtures
+!apps/ira-cockpit/fixtures/**/.cursor/
+!apps/ira-cockpit/fixtures/**/.cursor/**
+.superspec/hive/

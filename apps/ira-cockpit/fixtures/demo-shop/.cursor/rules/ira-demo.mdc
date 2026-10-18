@@ -1,0 +1,12 @@
+---
+description: Ira Demo Shop — project conventions for Cursor
+globs:
+  - "**/*"
+---
+
+# Ira Demo Shop
+
+- This folder is a **cockpit project root**, not a single SuperSpec feature.
+- Features live in `specs/001-catalog` and `specs/002-checkout`.
+- Use agents in `.cursor/agents/` for specialized work.
+- When Ira is driving, treat Ask-Me as the human gate for critical class.

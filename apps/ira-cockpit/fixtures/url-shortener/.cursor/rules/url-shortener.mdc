@@ -1,0 +1,11 @@
+---
+description: URL Shortener project conventions for Cursor
+globs:
+  - "**/*"
+---
+
+# URL Shortener
+
+- Feature lives in `specs/001-url-shortener/`
+- Prefer agents in `.cursor/agents/`
+- Ira dispatches host intents only — do not expect Ira to spawn `cursor-agent`

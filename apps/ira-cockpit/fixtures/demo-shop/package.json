@@ -1,0 +1,6 @@
+{
+  "name": "ira-demo-shop",
+  "private": true,
+  "version": "0.1.0",
+  "description": "Example project for Ira Cockpit + Cursor agents"
+}

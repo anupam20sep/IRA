@@ -1,0 +1,41 @@
+{
+  "repositoryRoot": "/Users/macky/IRA/superspec",
+  "projects": [
+    {
+      "id": "superspec",
+      "name": "SuperSpec",
+      "path": "/Users/macky/IRA/superspec"
+    },
+    {
+      "id": "demo-shop",
+      "name": "Demo Shop",
+      "path": "/Users/macky/IRA/superspec/apps/ira-cockpit/fixtures/demo-shop"
+    },
+    {
+      "id": "url-shortener",
+      "name": "URL Shortener",
+      "path": "/Users/macky/IRA/superspec/apps/ira-cockpit/fixtures/url-shortener"
+    }
+  ],
+  "engines": {
+    "prefer": ["cursor-agent", "claude", "codex", "opencode"],
+    "superspecBin": "packages/core/dist/cli.js"
+  },
+  "voice": {
+    "enabled": true,
+    "stt": {
+      "provider": "webspeech"
+    },
+    "tts": {
+      "provider": "webspeech",
+      "voiceId": "",
+      "model": "eleven_multilingual_v2"
+    },
+    "wakeWord": "ira",
+    "autoListenAfterReply": false
+  },
+  "distribution": {
+    "channel": "dev",
+    "updateUrl": ""
+  }
+}
